@@ -12,7 +12,9 @@ class ScoreGauge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = AppThemeScope.of(context).colors;
+    final t = AppThemeScope.of(context);
+    final c = t.colors;
+    final s = t.strings;
     final color = c.scoreColor(score);
 
     return Column(
@@ -39,7 +41,7 @@ class ScoreGauge extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.12),
+            color: color.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Text(
@@ -53,7 +55,7 @@ class ScoreGauge extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          'из 100',
+          s.outOf100,
           style: TextStyle(fontSize: 12, color: c.textSecondary),
         ),
       ],

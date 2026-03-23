@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:ai_stock_analyzer/data/analysis_cubit.dart';
 import 'package:ai_stock_analyzer/data/analysis_repository.dart';
+import 'package:ai_stock_analyzer/data/auth_cubit.dart';
 import 'package:ai_stock_analyzer/presentation/pages/home_page.dart';
 import 'package:ai_stock_analyzer/theme/app_theme.dart';
 
@@ -31,29 +32,37 @@ class _AiStockAnalyzerAppState extends State<AiStockAnalyzerApp> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => AnalysisCubit(
-        repository: AnalysisRepository(
-          httpClient: Dio(
-            BaseOptions(
-              baseUrl: AiStockAnalyzerApp._baseUrl,
-              connectTimeout: const Duration(seconds: 30),
-              receiveTimeout: const Duration(seconds: 60),
-              headers: {
-                'ngrok-skip-browser-warning': 'true',
-              },
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider(create: (_) => AuthCubit()),
+        BlocProvider(
+          create: (_) => AnalysisCubit(
+            repository: AnalysisRepository(
+              httpClient: Dio(
+                BaseOptions(
+                  baseUrl: AiStockAnalyzerApp._baseUrl,
+                  connectTimeout: const Duration(seconds: 30),
+                  receiveTimeout: const Duration(seconds: 60),
+                  headers: {
+                    'ngrok-skip-browser-warning': 'true',
+                  },
+                ),
+              ),
             ),
           ),
         ),
-      ),
+      ],
       child: ListenableBuilder(
         listenable: _themeNotifier,
         builder: (context, _) {
           return AppThemeScope(
             colors: _themeNotifier.colors,
             onToggle: _themeNotifier.toggle,
+            strings: _themeNotifier.strings,
+            locale: _themeNotifier.locale,
+            onToggleLocale: _themeNotifier.toggleLocale,
             child: MaterialApp(
-              title: 'AI Stock Analyzer',
+              title: 'ILM',
               debugShowCheckedModeBanner: false,
               theme: _themeNotifier.themeData,
               home: const HomePage(),

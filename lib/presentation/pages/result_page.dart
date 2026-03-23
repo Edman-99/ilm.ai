@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 
 import 'package:ai_stock_analyzer/data/stock_analysis_dto.dart';
+import 'package:ai_stock_analyzer/l10n/app_strings.dart';
 import 'package:ai_stock_analyzer/theme/app_theme.dart';
 
 class ResultPage extends StatelessWidget {
@@ -13,13 +14,14 @@ class ResultPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = AppThemeScope.of(context);
     final c = t.colors;
+    final s = t.strings;
     final width = MediaQuery.of(context).size.width;
     final isWide = width > 960;
 
     return Scaffold(
       body: CustomScrollView(
         slivers: [
-          _ResultAppBar(analysis: analysis, c: c, onToggle: t.onToggle),
+          _ResultAppBar(analysis: analysis, c: c, s: s, onToggle: t.onToggle),
           SliverToBoxAdapter(
             child: Center(
               child: ConstrainedBox(
@@ -28,26 +30,26 @@ class ResultPage extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(24, 24, 24, 48),
                   child: Column(
                     children: [
-                      _PlanCards(analysis: analysis, isWide: isWide, c: c),
+                      _PlanCards(analysis: analysis, isWide: isWide, c: c, s: s),
                       const SizedBox(height: 32),
                       if (isWide)
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(
-                              child: _AiAnalysisCard(analysis: analysis, c: c),
+                              child: _AiAnalysisCard(analysis: analysis, c: c, s: s),
                             ),
                             const SizedBox(width: 20),
                             SizedBox(
                               width: 340,
-                              child: _SwotCompact(c: c),
+                              child: _SwotCompact(c: c, s: s),
                             ),
                           ],
                         )
                       else ...[
-                        _AiAnalysisCard(analysis: analysis, c: c),
+                        _AiAnalysisCard(analysis: analysis, c: c, s: s),
                         const SizedBox(height: 20),
-                        _SwotCompact(c: c),
+                        _SwotCompact(c: c, s: s),
                       ],
                     ],
                   ),
@@ -67,22 +69,24 @@ class _ResultAppBar extends StatelessWidget {
   const _ResultAppBar({
     required this.analysis,
     required this.c,
+    required this.s,
     required this.onToggle,
   });
 
   final StockAnalysisDto analysis;
   final AppColors c;
+  final AppStrings s;
   final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
-    final changeColor = analysis.change1m >= 0 ? c.green : c.red;
-    final trendColor = analysis.isBullish ? c.green : c.red;
+    final changePrefix = analysis.change1m >= 0 ? '+' : '';
     final scoreColor = c.scoreColor(analysis.score);
+    final signalText = s.signal(analysis.score);
 
     return SliverAppBar(
       pinned: true,
-      backgroundColor: c.surface,
+      backgroundColor: c.bg,
       surfaceTintColor: Colors.transparent,
       leading: IconButton(
         icon: Icon(Icons.arrow_back, color: c.textPrimary),
@@ -90,7 +94,6 @@ class _ResultAppBar extends StatelessWidget {
       ),
       title: Row(
         children: [
-          // Тикер
           Text(
             analysis.ticker,
             style: TextStyle(
@@ -100,101 +103,44 @@ class _ResultAppBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 14),
-          // Цена
           Text(
             '\$${analysis.price.toStringAsFixed(2)}',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w500,
-              color: c.textPrimary,
+              color: c.textSecondary,
             ),
           ),
           const SizedBox(width: 8),
-          // Изменение
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: changeColor.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              '${analysis.change1m >= 0 ? '+' : ''}${analysis.change1m.toStringAsFixed(1)}%',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: changeColor,
-              ),
-            ),
+          _badge(
+            '$changePrefix${analysis.change1m.toStringAsFixed(1)}%',
+            c.textSecondary,
           ),
-          const SizedBox(width: 10),
-          // Тренд
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-            decoration: BoxDecoration(
-              color: trendColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    color: trendColor,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 5),
-                Text(
-                  analysis.trend,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: trendColor,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          const SizedBox(width: 8),
+          _badge(analysis.trend, c.textSecondary),
           const Spacer(),
-          // Score badge
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
             decoration: BoxDecoration(
-              color: scoreColor.withOpacity(0.12),
+              color: scoreColor.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: scoreColor.withValues(alpha: 0.2)),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '${analysis.score}',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: scoreColor,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  analysis.signal,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: scoreColor,
-                  ),
-                ),
-              ],
+            child: Text(
+              '${analysis.score} $signalText',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: scoreColor,
+              ),
             ),
           ),
           const SizedBox(width: 8),
-          // Theme toggle
           IconButton(
             onPressed: onToggle,
             icon: Icon(
-              c.isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-              size: 20,
+              c.isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+              size: 18,
               color: c.textSecondary,
             ),
           ),
@@ -206,41 +152,58 @@ class _ResultAppBar extends StatelessWidget {
       ),
     );
   }
+
+  Widget _badge(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        border: Border.all(color: c.border),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          color: color,
+        ),
+      ),
+    );
+  }
 }
 
-// ── 3 карточки-плана ──
+// ── 3 cards ──
 
 class _PlanCards extends StatelessWidget {
   const _PlanCards({
     required this.analysis,
     required this.isWide,
     required this.c,
+    required this.s,
   });
 
   final StockAnalysisDto analysis;
   final bool isWide;
   final AppColors c;
+  final AppStrings s;
 
   @override
   Widget build(BuildContext context) {
+    final signalText = s.signal(analysis.score);
     final cards = [
       _PlanData(
-        title: 'Обзор',
-        subtitle: 'Быстрый вердикт',
-        icon: Icons.flash_on_rounded,
+        title: s.overview,
+        subtitle: s.quickVerdict,
         features: [
-          'Скор: ${analysis.score}/100 — ${analysis.signal}',
-          'Тренд: ${analysis.trend}',
-          'Цена: \$${analysis.price.toStringAsFixed(2)}',
-          'Изменение: ${analysis.change1m >= 0 ? '+' : ''}${analysis.change1m.toStringAsFixed(1)}%',
+          '${s.score}: ${analysis.score}/100 — $signalText',
+          '${s.trend}: ${analysis.trend}',
+          '${s.price}: \$${analysis.price.toStringAsFixed(2)}',
+          '${s.change}: ${analysis.change1m >= 0 ? '+' : ''}${analysis.change1m.toStringAsFixed(1)}%',
         ],
-        accentColor: c.green,
       ),
       _PlanData(
-        title: 'Индикаторы',
-        subtitle: 'Технический анализ',
-        icon: Icons.bar_chart_rounded,
-        isHighlighted: true,
+        title: s.indicators,
+        subtitle: s.technicalAnalysis,
         features: [
           'RSI: ${analysis.rsi.toStringAsFixed(1)}',
           'SMA 20 / 50: ${analysis.sma20.toStringAsFixed(2)} / ${analysis.sma50.toStringAsFixed(2)}',
@@ -249,20 +212,17 @@ class _PlanCards extends StatelessWidget {
           'Bollinger: ${analysis.bbLower.toStringAsFixed(0)}–${analysis.bbUpper.toStringAsFixed(0)}',
           'ATR: ${analysis.atr.toStringAsFixed(2)}',
         ],
-        accentColor: const Color(0xFF636AFF),
       ),
       _PlanData(
-        title: 'AI Анализ',
+        title: s.aiAnalysis,
         subtitle: analysis.modeDescription,
-        icon: Icons.auto_awesome,
         features: [
-          'Полный AI отчёт',
-          'Фундаментальный анализ',
-          'Оценка рисков',
-          'Рекомендации',
-          'SWOT анализ',
+          s.fullAiReport,
+          s.fundamentalAnalysis,
+          s.riskAssessment,
+          s.recommendations,
+          s.swotAnalysis,
         ],
-        accentColor: const Color(0xFF818CF8),
       ),
     ];
 
@@ -295,127 +255,106 @@ class _PlanData {
   const _PlanData({
     required this.title,
     required this.subtitle,
-    required this.icon,
     required this.features,
-    required this.accentColor,
-    this.isHighlighted = false,
   });
 
   final String title;
   final String subtitle;
-  final IconData icon;
   final List<String> features;
-  final Color accentColor;
-  final bool isHighlighted;
 }
 
-class _PlanCard extends StatelessWidget {
+class _PlanCard extends StatefulWidget {
   const _PlanCard({required this.data, required this.c});
   final _PlanData data;
   final AppColors c;
 
   @override
+  State<_PlanCard> createState() => _PlanCardState();
+}
+
+class _PlanCardState extends State<_PlanCard> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: c.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: data.isHighlighted
-              ? data.accentColor.withOpacity(0.4)
-              : c.border,
-          width: data.isHighlighted ? 1.5 : 1,
+    final c = widget.c;
+    final data = widget.data;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: _hovered
+              ? (c.isDark ? const Color(0xFF111111) : const Color(0xFFF5F5F5))
+              : c.bg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: _hovered
+                ? (c.isDark ? const Color(0xFF555555) : const Color(0xFFCCCCCC))
+                : c.border,
+          ),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: data.accentColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(data.icon, size: 20, color: data.accentColor),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              data.title,
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: c.textPrimary,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              data.subtitle,
+              style: TextStyle(fontSize: 12, color: c.textSecondary),
+            ),
+            const SizedBox(height: 16),
+            Divider(color: c.border, height: 1),
+            const SizedBox(height: 14),
+            ...data.features.map(
+              (f) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
                   children: [
                     Text(
-                      data.title,
+                      '·',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
-                        color: c.textPrimary,
+                        color: c.textSecondary,
                       ),
                     ),
-                    Text(
-                      data.subtitle,
-                      style: TextStyle(fontSize: 12, color: c.textSecondary),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        f,
+                        style: TextStyle(fontSize: 14, color: c.textPrimary),
+                      ),
                     ),
                   ],
                 ),
               ),
-              if (data.isHighlighted)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: data.accentColor,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Text(
-                    'Ключевые',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Divider(color: c.border, height: 1),
-          const SizedBox(height: 16),
-          ...data.features.map(
-            (f) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.check_circle_outline,
-                    size: 16,
-                    color: data.accentColor.withOpacity(0.6),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      f,
-                      style: TextStyle(fontSize: 14, color: c.textPrimary),
-                    ),
-                  ),
-                ],
-              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
-// ── AI Анализ — красивые секции ──
+// ── AI Analysis ──
 
 class _AiAnalysisCard extends StatelessWidget {
-  const _AiAnalysisCard({required this.analysis, required this.c});
+  const _AiAnalysisCard({required this.analysis, required this.c, required this.s});
   final StockAnalysisDto analysis;
   final AppColors c;
+  final AppStrings s;
 
   @override
   Widget build(BuildContext context) {
@@ -424,119 +363,37 @@ class _AiAnalysisCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Заголовок
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: c.card,
+            color: c.bg,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: c.border),
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF636AFF).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.smart_toy_outlined,
-                  size: 22,
-                  color: Color(0xFF636AFF),
+              Text(
+                s.aiAnalysis,
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 18,
+                  color: c.textPrimary,
                 ),
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'AI Анализ',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 18,
-                        color: c.textPrimary,
-                      ),
-                    ),
-                    Text(
-                      analysis.modeDescription,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: c.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
+              const SizedBox(height: 4),
+              Text(
+                analysis.modeDescription,
+                style: TextStyle(fontSize: 13, color: c.textSecondary),
               ),
             ],
           ),
         ),
         const SizedBox(height: 12),
-        // Секции
-        ...sections.map((s) => _SectionCard(section: s, c: c)),
+        ...sections.map((sec) => _SectionCard(section: sec, c: c)),
       ],
     );
-  }
-
-  static const _sectionIcons = <String, IconData>{
-    'техническ': Icons.bar_chart_rounded,
-    'позици': Icons.show_chart,
-    'индикатор': Icons.analytics_outlined,
-    'момент': Icons.speed,
-    'волатильност': Icons.swap_vert,
-    'объём': Icons.stacked_bar_chart,
-    'outlook': Icons.remove_red_eye_outlined,
-    'рекоменда': Icons.thumb_up_outlined,
-    'недостающ': Icons.warning_amber,
-    'данн': Icons.storage,
-    'вердикт': Icons.flash_on_rounded,
-    'фундамент': Icons.account_balance,
-    'риск': Icons.shield_outlined,
-    'превью': Icons.description_outlined,
-    'портфел': Icons.pie_chart_outline,
-    'диверсиф': Icons.donut_large,
-    'сектор': Icons.grid_view,
-    'прибыл': Icons.trending_up,
-    'убыточ': Icons.trending_down,
-  };
-
-  static const _sectionColors = <String, Color>{
-    'техническ': Color(0xFF636AFF),
-    'позици': Color(0xFF636AFF),
-    'индикатор': Color(0xFF2196F3),
-    'момент': Color(0xFF00BCD4),
-    'волатильност': Color(0xFFFF9800),
-    'объём': Color(0xFF9C27B0),
-    'outlook': Color(0xFF4CAF50),
-    'рекоменда': Color(0xFF4CAF50),
-    'недостающ': Color(0xFFFF9800),
-    'вердикт': Color(0xFF22C55E),
-    'фундамент': Color(0xFF2196F3),
-    'риск': Color(0xFFEF4444),
-    'превью': Color(0xFF636AFF),
-    'портфел': Color(0xFF636AFF),
-    'диверсиф': Color(0xFFFF9800),
-    'сектор': Color(0xFF9C27B0),
-    'прибыл': Color(0xFF22C55E),
-    'убыточ': Color(0xFFEF4444),
-  };
-
-  IconData _iconForTitle(String title) {
-    final lower = title.toLowerCase();
-    for (final e in _sectionIcons.entries) {
-      if (lower.contains(e.key)) return e.value;
-    }
-    return Icons.article_outlined;
-  }
-
-  Color _colorForTitle(String title) {
-    final lower = title.toLowerCase();
-    for (final e in _sectionColors.entries) {
-      if (lower.contains(e.key)) return e.value;
-    }
-    return const Color(0xFF636AFF);
   }
 
   List<_Section> _parseSections(String md) {
@@ -551,8 +408,6 @@ class _AiAnalysisCard extends StatelessWidget {
           sections.add(_Section(
             title: currentTitle,
             body: currentBody.toString().trim(),
-            icon: _iconForTitle(currentTitle),
-            color: _colorForTitle(currentTitle),
           ));
           currentBody.clear();
         }
@@ -561,9 +416,8 @@ class _AiAnalysisCard extends StatelessWidget {
       } else if (currentTitle != null) {
         currentBody.writeln(line);
       } else if (line.trim().isNotEmpty) {
-        // Текст до первого заголовка
         if (sections.isEmpty && currentTitle == null) {
-          currentTitle = 'Сводка';
+          currentTitle = s.summary;
         }
         currentBody.writeln(line);
       }
@@ -573,8 +427,6 @@ class _AiAnalysisCard extends StatelessWidget {
       sections.add(_Section(
         title: currentTitle,
         body: currentBody.toString().trim(),
-        icon: _iconForTitle(currentTitle),
-        color: _colorForTitle(currentTitle),
       ));
     }
 
@@ -583,82 +435,84 @@ class _AiAnalysisCard extends StatelessWidget {
 }
 
 class _Section {
-  const _Section({
-    required this.title,
-    required this.body,
-    required this.icon,
-    required this.color,
-  });
-
+  const _Section({required this.title, required this.body});
   final String title;
   final String body;
-  final IconData icon;
-  final Color color;
 }
 
-class _SectionCard extends StatelessWidget {
+class _SectionCard extends StatefulWidget {
   const _SectionCard({required this.section, required this.c});
   final _Section section;
   final AppColors c;
 
   @override
+  State<_SectionCard> createState() => _SectionCardState();
+}
+
+class _SectionCardState extends State<_SectionCard> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
+    final c = widget.c;
+    final section = widget.section;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: c.card,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: c.border),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: section.color.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(section.icon, size: 16, color: section.color),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    section.title,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: c.textPrimary,
-                    ),
-                  ),
-                ),
-              ],
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: _hovered
+                ? (c.isDark
+                    ? const Color(0xFF111111)
+                    : const Color(0xFFF5F5F5))
+                : c.bg,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: _hovered
+                  ? (c.isDark
+                      ? const Color(0xFF555555)
+                      : const Color(0xFFCCCCCC))
+                  : c.border,
             ),
-            const SizedBox(height: 12),
-            MarkdownBody(
-              data: section.body,
-              shrinkWrap: true,
-              styleSheet: MarkdownStyleSheet(
-                p: TextStyle(
-                  fontSize: 14,
-                  color: c.textPrimary,
-                  height: 1.7,
-                ),
-                strong: TextStyle(
-                  fontWeight: FontWeight.w700,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                section.title,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
                   color: c.textPrimary,
                 ),
-                listBullet: TextStyle(color: c.textSecondary),
-                listBulletPadding: const EdgeInsets.only(right: 8),
-                blockSpacing: 10,
               ),
-            ),
-          ],
+              const SizedBox(height: 12),
+              MarkdownBody(
+                data: section.body,
+                shrinkWrap: true,
+                styleSheet: MarkdownStyleSheet(
+                  p: TextStyle(
+                    fontSize: 14,
+                    color: c.textPrimary,
+                    height: 1.7,
+                  ),
+                  strong: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: c.textPrimary,
+                  ),
+                  listBullet: TextStyle(color: c.textSecondary),
+                  listBulletPadding: const EdgeInsets.only(right: 8),
+                  blockSpacing: 10,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -668,15 +522,16 @@ class _SectionCard extends StatelessWidget {
 // ── SWOT ──
 
 class _SwotCompact extends StatelessWidget {
-  const _SwotCompact({required this.c});
+  const _SwotCompact({required this.c, required this.s});
   final AppColors c;
+  final AppStrings s;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: c.card,
+        color: c.bg,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: c.border),
       ),
@@ -686,43 +541,19 @@ class _SwotCompact extends StatelessWidget {
           Text(
             'SWOT',
             style: TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              fontSize: 17,
               color: c.textPrimary,
             ),
           ),
           const SizedBox(height: 16),
-          _SwotQ(
-            title: 'Сильные стороны',
-            items: const ['Стабильный рост выручки', 'Сильный бренд'],
-            color: c.green,
-            icon: Icons.trending_up,
-            c: c,
-          ),
+          _SwotQ(title: s.strengths, items: s.swotStrengthItems, c: c),
           const SizedBox(height: 10),
-          _SwotQ(
-            title: 'Слабые стороны',
-            items: const ['Высокий P/E', 'Зависимость от рынка'],
-            color: c.red,
-            icon: Icons.trending_down,
-            c: c,
-          ),
+          _SwotQ(title: s.weaknesses, items: s.swotWeaknessItems, c: c),
           const SizedBox(height: 10),
-          _SwotQ(
-            title: 'Возможности',
-            items: const ['AI сегмент', 'Новые рынки'],
-            color: const Color(0xFF636AFF),
-            icon: Icons.lightbulb_outline,
-            c: c,
-          ),
+          _SwotQ(title: s.opportunities, items: s.swotOpportunityItems, c: c),
           const SizedBox(height: 10),
-          _SwotQ(
-            title: 'Угрозы',
-            items: const ['Конкуренция', 'Регуляторные риски'],
-            color: c.yellow,
-            icon: Icons.warning_amber,
-            c: c,
-          ),
+          _SwotQ(title: s.threats, items: s.swotThreatItems, c: c),
         ],
       ),
     );
@@ -733,15 +564,11 @@ class _SwotQ extends StatelessWidget {
   const _SwotQ({
     required this.title,
     required this.items,
-    required this.color,
-    required this.icon,
     required this.c,
   });
 
   final String title;
   final List<String> items;
-  final Color color;
-  final IconData icon;
   final AppColors c;
 
   @override
@@ -750,34 +577,30 @@ class _SwotQ extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.05),
+        color: c.isDark
+            ? Colors.white.withValues(alpha: 0.03)
+            : Colors.black.withValues(alpha: 0.02),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withOpacity(0.12)),
+        border: Border.all(color: c.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(icon, size: 14, color: color),
-              const SizedBox(width: 6),
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: color,
-                ),
-              ),
-            ],
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: c.textPrimary,
+            ),
           ),
           const SizedBox(height: 6),
           ...items.map(
             (item) => Padding(
               padding: const EdgeInsets.only(bottom: 2),
               child: Text(
-                '• $item',
-                style: TextStyle(fontSize: 12, color: c.textPrimary),
+                '· $item',
+                style: TextStyle(fontSize: 13, color: c.textSecondary),
               ),
             ),
           ),

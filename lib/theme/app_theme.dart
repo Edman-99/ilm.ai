@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'package:ai_stock_analyzer/l10n/app_strings.dart';
+
 /// Переключаемая тема: light / dark.
 class AppColors {
   const AppColors._({
@@ -34,10 +36,10 @@ class AppColors {
   static const dark = AppColors._(
     bg: Color(0xFF000000),
     surface: Color(0xFF0A0A0A),
-    card: Color(0xFF111111),
-    border: Color(0xFF1E1E1E),
+    card: Color(0xFF0A0A0A),
+    border: Color(0xFF333333),
     textPrimary: Color(0xFFFFFFFF),
-    textSecondary: Color(0xFF8A8A8A),
+    textSecondary: Color(0xFF999999),
     green: Color(0xFF22C55E),
     red: Color(0xFFEF4444),
     accent: Color(0xFFFFFFFF),
@@ -69,8 +71,17 @@ class ThemeNotifier extends ChangeNotifier {
   bool get isDark => _isDark;
   AppColors get colors => _isDark ? AppColors.dark : AppColors.light;
 
+  String _locale = 'en';
+  String get locale => _locale;
+  AppStrings get strings => _locale == 'ru' ? AppStrings.ru : AppStrings.en;
+
   void toggle() {
     _isDark = !_isDark;
+    notifyListeners();
+  }
+
+  void toggleLocale() {
+    _locale = _locale == 'ru' ? 'en' : 'ru';
     notifyListeners();
   }
 
@@ -135,17 +146,23 @@ class ThemeNotifier extends ChangeNotifier {
   }
 }
 
-/// Доступ к цветам через InheritedWidget.
+/// Доступ к цветам и строкам через InheritedWidget.
 class AppThemeScope extends InheritedWidget {
   const AppThemeScope({
     required this.colors,
     required this.onToggle,
+    required this.strings,
+    required this.locale,
+    required this.onToggleLocale,
     required super.child,
     super.key,
   });
 
   final AppColors colors;
   final VoidCallback onToggle;
+  final AppStrings strings;
+  final String locale;
+  final VoidCallback onToggleLocale;
 
   static AppThemeScope of(BuildContext context) {
     return context.dependOnInheritedWidgetOfExactType<AppThemeScope>()!;
@@ -153,5 +170,6 @@ class AppThemeScope extends InheritedWidget {
 
   @override
   bool updateShouldNotify(AppThemeScope oldWidget) =>
-      colors.isDark != oldWidget.colors.isDark;
+      colors.isDark != oldWidget.colors.isDark ||
+      locale != oldWidget.locale;
 }

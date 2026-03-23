@@ -57,11 +57,5 @@ class StockAnalysisDto {
   final int score;
   final String analysis;
 
-  String get signal {
-    if (score >= 65) return 'ПОКУПКА';
-    if (score >= 45) return 'ЖДАТЬ';
-    return 'ПРОДАЖА';
-  }
-
   bool get isBullish => trend.toLowerCase().contains('бычий');
 }
