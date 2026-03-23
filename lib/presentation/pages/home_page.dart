@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:ai_stock_analyzer/data/analysis_cubit.dart';
+import 'package:ai_stock_analyzer/data/analytics_service.dart';
 import 'package:ai_stock_analyzer/data/auth_cubit.dart';
 import 'package:ai_stock_analyzer/data/user_plan.dart';
 import 'package:ai_stock_analyzer/l10n/app_strings.dart';
 import 'package:ai_stock_analyzer/presentation/pages/auth_page.dart';
+import 'package:ai_stock_analyzer/presentation/pages/portfolio_page.dart';
 import 'package:ai_stock_analyzer/presentation/pages/pricing_page.dart';
 import 'package:ai_stock_analyzer/presentation/pages/result_page.dart';
+import 'package:ai_stock_analyzer/presentation/widgets/analysis_skeleton.dart';
 import 'package:ai_stock_analyzer/presentation/widgets/hero_section.dart';
 import 'package:ai_stock_analyzer/presentation/widgets/mode_chips.dart';
 import 'package:ai_stock_analyzer/theme/app_theme.dart';
@@ -49,12 +52,21 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  void _onModeSelected(String mode) {
+  Future<void> _onModeSelected(String mode) async {
+    AnalyticsService.instance.modeSelected(mode);
     context.read<AnalysisCubit>().setMode(mode);
+
+    final auth = context.read<AuthCubit>().state;
+    if (!auth.isAuthenticated) {
+      final ok = await showAuthDialog(context);
+      if (!ok || !mounted) return;
+    }
+
     setState(() => _step = 1);
   }
 
   void _openPricing() {
+    AnalyticsService.instance.pricingViewed();
     final cubit = context.read<AnalysisCubit>();
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -77,6 +89,7 @@ class _HomePageState extends State<HomePage> {
   void _onTickerSubmit() {
     final ticker = _tickerController.text.trim();
     if (ticker.isNotEmpty) {
+      AnalyticsService.instance.tickerEntered(ticker);
       context.read<AnalysisCubit>().setTicker(ticker);
       setState(() => _step = 2);
     }
@@ -93,10 +106,26 @@ class _HomePageState extends State<HomePage> {
       listeners: [
         BlocListener<AnalysisCubit, AnalysisState>(
           listenWhen: (prev, curr) =>
+              prev.status != curr.status && curr.isError,
+          listener: (context, state) {
+            AnalyticsService.instance.analysisError(
+              state.ticker,
+              state.selectedMode,
+              state.errorKey ?? 'unknown',
+            );
+          },
+        ),
+        BlocListener<AnalysisCubit, AnalysisState>(
+          listenWhen: (prev, curr) =>
               prev.status != curr.status &&
               curr.isLoaded &&
               curr.result != null,
           listener: (context, state) {
+            AnalyticsService.instance.analysisCompleted(
+              state.result!.ticker,
+              state.result!.mode,
+              state.result!.score,
+            );
             Navigator.of(context)
                 .push(
               MaterialPageRoute<void>(
@@ -117,8 +146,12 @@ class _HomePageState extends State<HomePage> {
         BlocListener<AuthCubit, AuthState>(
           listener: (context, state) {
             if (state.isAuthenticated && state.user != null) {
+              AnalyticsService.instance.identify(state.user!.email);
+              AnalyticsService.instance.login(state.user!.email);
               cubit.setPlan(state.user!.plan);
             } else if (!state.isAuthenticated) {
+              AnalyticsService.instance.logout();
+              AnalyticsService.instance.reset();
               cubit.reset();
               _tickerController.clear();
               setState(() => _step = 0);
@@ -129,27 +162,36 @@ class _HomePageState extends State<HomePage> {
       child: Scaffold(
         body: Stack(
           children: [
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              switchInCurve: Curves.easeOut,
-              switchOutCurve: Curves.easeIn,
-              transitionBuilder: (child, animation) {
-                return FadeTransition(
-                  opacity: animation,
-                  child: SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0, 0.03),
-                      end: Offset.zero,
-                    ).animate(animation),
-                    child: child,
-                  ),
+            BlocBuilder<AnalysisCubit, AnalysisState>(
+              builder: (context, state) {
+                return AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  switchInCurve: Curves.easeOut,
+                  switchOutCurve: Curves.easeIn,
+                  transitionBuilder: (child, animation) {
+                    return FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, 0.03),
+                          end: Offset.zero,
+                        ).animate(animation),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: state.isLoading
+                      ? AnalysisSkeleton(
+                          ticker: state.ticker,
+                          mode: s.modes[state.selectedMode]?.label ?? state.selectedMode,
+                        )
+                      : _step == 0
+                          ? _buildStep0(cubit, c, s)
+                          : _step == 1
+                              ? _buildStep1(cubit, c, s)
+                              : _buildStep2(cubit, c, s),
                 );
               },
-              child: _step == 0
-                  ? _buildStep0(cubit, c, s)
-                  : _step == 1
-                      ? _buildStep1(cubit, c, s)
-                      : _buildStep2(cubit, c, s),
             ),
 
             // Top-left: credits
@@ -169,6 +211,8 @@ class _HomePageState extends State<HomePage> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  _buildPortfolioButton(c, s),
+                  const SizedBox(width: 8),
                   _buildAuthButton(c),
                   const SizedBox(width: 8),
                   _buildPricingButton(c),
@@ -249,23 +293,25 @@ class _HomePageState extends State<HomePage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: c.border),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      modeLabel,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: c.textSecondary,
+                  if (modeLabel.isNotEmpty) ...[
+                    Container(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: c.border),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        modeLabel,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: c.textSecondary,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
+                    const SizedBox(height: 24),
+                  ],
 
                   Text(
                     s.enterTicker,
@@ -363,23 +409,25 @@ class _HomePageState extends State<HomePage> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: c.border),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          modeLabel,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: c.textSecondary,
+                      if (modeLabel.isNotEmpty) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: c.border),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            modeLabel,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: c.textSecondary,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 10),
+                        const SizedBox(width: 10),
+                      ],
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 8),
@@ -411,7 +459,10 @@ class _HomePageState extends State<HomePage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '${s.modes[state.selectedMode]?.bank ?? ''} · ${state.ticker.toUpperCase()}',
+                    [
+                      if (s.modes[state.selectedMode]?.bank case final bank?) bank,
+                      state.ticker.toUpperCase(),
+                    ].join(' · '),
                     style: TextStyle(fontSize: 14, color: c.textSecondary),
                   ),
                   const SizedBox(height: 32),
@@ -422,12 +473,11 @@ class _HomePageState extends State<HomePage> {
                     child: ElevatedButton(
                       onPressed: state.isLoading
                           ? null
-                          : () async {
-                              final auth = context.read<AuthCubit>().state;
-                              if (!auth.isAuthenticated) {
-                                final ok = await showAuthDialog(context);
-                                if (!ok || !mounted) return;
-                              }
+                          : () {
+                              AnalyticsService.instance.analysisStarted(
+                                state.ticker,
+                                state.selectedMode,
+                              );
                               cubit.analyze();
                             },
                       child: state.isLoading
@@ -547,6 +597,45 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Widget _buildPortfolioButton(AppColors c, AppStrings s) {
+    return GestureDetector(
+      onTap: () {
+        AnalyticsService.instance.track('portfolio_opened');
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => const PortfolioPage(),
+          ),
+        );
+      },
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            border: Border.all(color: c.accent.withValues(alpha: 0.3)),
+            borderRadius: BorderRadius.circular(10),
+            color: c.accent.withValues(alpha: 0.06),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.pie_chart_rounded, size: 16, color: c.accent),
+              const SizedBox(width: 6),
+              Text(
+                s.buildPortfolio,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: c.accent,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildPricingButton(AppColors c) {
     return IconButton(
       onPressed: _openPricing,
@@ -567,7 +656,10 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildLocaleToggle(AppColors c, AppThemeScope t) {
     return IconButton(
-      onPressed: t.onToggleLocale,
+      onPressed: () {
+        t.onToggleLocale();
+        AnalyticsService.instance.localeToggled(t.locale == 'ru' ? 'en' : 'ru');
+      },
       style: IconButton.styleFrom(
         backgroundColor: c.surface,
         shape: RoundedRectangleBorder(
@@ -588,7 +680,10 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildThemeToggle(AppColors c, VoidCallback onToggle) {
     return IconButton(
-      onPressed: onToggle,
+      onPressed: () {
+        onToggle();
+        AnalyticsService.instance.themeToggled(!c.isDark);
+      },
       style: IconButton.styleFrom(
         backgroundColor: c.surface,
         shape: RoundedRectangleBorder(

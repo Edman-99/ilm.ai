@@ -21,7 +21,10 @@ class PlanFeature {
   final bool included;
 }
 
-const freeModes = <String>{'technical'};
+const freeModes = <String>{
+  'full', 'technical', 'screener', 'risk', 'dcf',
+  'earnings', 'portfolio', 'dividends', 'competitors',
+};
 
 const plans = <UserPlan, PlanInfo>{
   UserPlan.free: PlanInfo(

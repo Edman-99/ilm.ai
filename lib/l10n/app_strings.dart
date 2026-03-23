@@ -105,6 +105,34 @@ class AppStrings {
     required this.signalBuy,
     required this.signalHold,
     required this.signalSell,
+    // Share
+    required this.share,
+    required this.copied,
+    // Disclaimer
+    required this.disclaimer,
+    // Portfolio builder
+    required this.buildPortfolio,
+    required this.buildPortfolioSubtitle,
+    required this.enterAmount,
+    required this.amountHint,
+    required this.chooseStrategy,
+    required this.strategyConservative,
+    required this.strategyConservativeDesc,
+    required this.strategyModerate,
+    required this.strategyModerateDesc,
+    required this.strategyAggressive,
+    required this.strategyAggressiveDesc,
+    required this.buildingPortfolio,
+    required this.yourPortfolio,
+    required this.expectedReturn,
+    required this.annualRisk,
+    required this.sharpeRatio,
+    required this.allocation,
+    required this.ticker,
+    required this.weight,
+    required this.amount,
+    required this.sector,
+    required this.addToWatchlist,
     // Errors (cubit)
     required this.errorModeUnavailable,
     required this.errorLimitReached,
@@ -210,6 +238,37 @@ class AppStrings {
   final List<String> swotOpportunityItems;
   final List<String> swotThreatItems;
 
+  // Share
+  final String share;
+  final String copied;
+
+  // Disclaimer
+  final String disclaimer;
+
+  // Portfolio builder
+  final String buildPortfolio;
+  final String buildPortfolioSubtitle;
+  final String enterAmount;
+  final String amountHint;
+  final String chooseStrategy;
+  final String strategyConservative;
+  final String strategyConservativeDesc;
+  final String strategyModerate;
+  final String strategyModerateDesc;
+  final String strategyAggressive;
+  final String strategyAggressiveDesc;
+  final String buildingPortfolio;
+  final String yourPortfolio;
+  final String expectedReturn;
+  final String annualRisk;
+  final String sharpeRatio;
+  final String allocation;
+  final String ticker;
+  final String weight;
+  final String amount;
+  final String sector;
+  final String addToWatchlist;
+
   // Score
   final String outOf100;
   final String signalBuy;
@@ -249,55 +308,55 @@ class AppStrings {
         label: 'Полный отчёт',
         bank: 'Все методологии',
         description:
-            'Комплексный анализ акции по всем 9 методологиям ведущих инвестиционных банков мира в одном отчёте',
+            'Полная картина за 1 минуту — все 8 анализов в одном отчёте, чтобы принять решение не открывая другие сайты',
       ),
       'technical': ModeInfo(
         label: 'Технический анализ',
         bank: 'Citadel',
         description:
-            'RSI, MACD, Bollinger Bands, скользящие средние, уровни поддержки и сопротивления',
+            'Когда покупать и продавать — точки входа и выхода на основе технических сигналов и уровней',
       ),
       'screener': ModeInfo(
         label: 'Скрининг',
         bank: 'Goldman Sachs',
         description:
-            'Фундаментальный скрининг акции — финансовые мультипликаторы, рентабельность, рост выручки',
+            'Стоит ли акция своих денег — быстрая проверка фундаментала и мультипликаторов за 30 секунд',
       ),
       'risk': ModeInfo(
         label: 'Оценка рисков',
         bank: 'Bridgewater',
         description:
-            'Анализ рыночных, секторальных и специфических рисков компании с рекомендациями по хеджированию',
+            'Что может пойти не так — скрытые риски которые вы можете пропустить и как от них защититься',
       ),
       'dcf': ModeInfo(
         label: 'DCF оценка',
         bank: 'Morgan Stanley',
         description:
-            'Оценка справедливой стоимости методом дисконтированных денежных потоков с прогнозом на 5 лет',
+            'Реальная цена акции — переоценена или недооценена прямо сейчас на основе будущих денежных потоков',
       ),
       'earnings': ModeInfo(
         label: 'Отчётность',
         bank: 'JPMorgan',
         description:
-            'Анализ перед квартальной отчётностью — ожидания рынка, исторические сюрпризы, прогноз реакции',
+            'Готовность к отчётности — стоит ли держать акцию перед earnings или лучше выйти заранее',
       ),
       'portfolio': ModeInfo(
         label: 'Портфель',
         bank: 'BlackRock',
         description:
-            'Построение оптимального портфеля — диверсификация, корреляции, распределение по секторам',
+            'Как собрать портфель — оптимальные доли, балансировка секторов и снижение общего риска',
       ),
       'dividends': ModeInfo(
         label: 'Дивиденды',
         bank: 'Harvard',
         description:
-            'Дивидендная доходность, история выплат, коэффициент покрытия, прогноз будущих дивидендов',
+            'Сколько заработаете пассивно — прогноз дивидендного дохода и надёжность выплат',
       ),
       'competitors': ModeInfo(
         label: 'Конкуренты',
         bank: 'Bain',
         description:
-            'Сравнительный анализ с конкурентами — рыночная доля, маржинальность, темпы роста',
+            'Лучше ли конкурентов — кто выигрывает в секторе по марже, росту и доле рынка',
       ),
     },
     enterTicker: 'Напишите тикер компании',
@@ -401,6 +460,31 @@ class AppStrings {
     signalBuy: 'ПОКУПКА',
     signalHold: 'ЖДАТЬ',
     signalSell: 'ПРОДАЖА',
+    share: 'Поделиться',
+    copied: 'Скопировано!',
+    disclaimer: 'Данный анализ носит информационный характер и не является инвестиционной рекомендацией. Перед принятием инвестиционных решений проконсультируйтесь с финансовым советником.',
+    buildPortfolio: 'Собрать портфель',
+    buildPortfolioSubtitle: 'AI подберёт оптимальный портфель под вашу сумму и стратегию',
+    enterAmount: 'Сумма инвестиций',
+    amountHint: 'Например, 10000',
+    chooseStrategy: 'Выберите стратегию',
+    strategyConservative: 'Консервативная',
+    strategyConservativeDesc: 'Минимальный риск, стабильный доход. Облигации и защитные активы.',
+    strategyModerate: 'Умеренная',
+    strategyModerateDesc: 'Баланс роста и защиты. Акции + облигации + альтернативы.',
+    strategyAggressive: 'Агрессивная',
+    strategyAggressiveDesc: 'Максимальный рост. Технологии, крипто, развивающиеся рынки.',
+    buildingPortfolio: 'Собираем портфель...',
+    yourPortfolio: 'Ваш портфель',
+    expectedReturn: 'Ожидаемая доходность',
+    annualRisk: 'Годовой риск',
+    sharpeRatio: 'Коэффициент Шарпа',
+    allocation: 'Распределение',
+    ticker: 'Тикер',
+    weight: 'Доля',
+    amount: 'Сумма',
+    sector: 'Сектор',
+    addToWatchlist: 'В Watchlist',
     errorModeUnavailable: 'Этот режим недоступен на вашем тарифе.',
     errorLimitReached: 'Лимит анализов исчерпан. Обновите тариф для продолжения.',
     errorServer: 'Ошибка сервера',
@@ -425,55 +509,55 @@ class AppStrings {
         label: 'Full Report',
         bank: 'All Methodologies',
         description:
-            'Comprehensive stock analysis using all 9 methodologies from the world\'s leading investment banks in one report',
+            'Full picture in 1 minute — all 8 analyses in one report so you can decide without opening other sites',
       ),
       'technical': ModeInfo(
         label: 'Technical Analysis',
         bank: 'Citadel',
         description:
-            'RSI, MACD, Bollinger Bands, moving averages, support and resistance levels',
+            'When to buy and sell — entry and exit points based on technical signals and levels',
       ),
       'screener': ModeInfo(
         label: 'Screening',
         bank: 'Goldman Sachs',
         description:
-            'Fundamental stock screening — financial multiples, profitability, revenue growth',
+            'Is the stock worth it — quick fundamental and multiples check in 30 seconds',
       ),
       'risk': ModeInfo(
         label: 'Risk Assessment',
         bank: 'Bridgewater',
         description:
-            'Analysis of market, sectoral, and company-specific risks with hedging recommendations',
+            'What could go wrong — hidden risks you might miss and how to protect against them',
       ),
       'dcf': ModeInfo(
         label: 'DCF Valuation',
         bank: 'Morgan Stanley',
         description:
-            'Fair value estimation using discounted cash flow method with a 5-year forecast',
+            'True stock price — overvalued or undervalued right now based on future cash flows',
       ),
       'earnings': ModeInfo(
         label: 'Earnings',
         bank: 'JPMorgan',
         description:
-            'Pre-earnings analysis — market expectations, historical surprises, reaction forecast',
+            'Earnings readiness — should you hold before earnings or exit in advance',
       ),
       'portfolio': ModeInfo(
         label: 'Portfolio',
         bank: 'BlackRock',
         description:
-            'Optimal portfolio construction — diversification, correlations, sector allocation',
+            'How to build a portfolio — optimal allocations, sector balance, and overall risk reduction',
       ),
       'dividends': ModeInfo(
         label: 'Dividends',
         bank: 'Harvard',
         description:
-            'Dividend yield, payout history, coverage ratio, future dividend forecast',
+            'How much passive income — dividend income forecast and payout reliability',
       ),
       'competitors': ModeInfo(
         label: 'Competitors',
         bank: 'Bain',
         description:
-            'Competitive analysis — market share, margins, growth rates',
+            'Better than competitors — who is winning in the sector by margins, growth, and market share',
       ),
     },
     enterTicker: 'Enter company ticker',
@@ -577,6 +661,31 @@ class AppStrings {
     signalBuy: 'BUY',
     signalHold: 'HOLD',
     signalSell: 'SELL',
+    share: 'Share',
+    copied: 'Copied!',
+    disclaimer: 'This analysis is for informational purposes only and does not constitute investment advice. Consult a financial advisor before making investment decisions.',
+    buildPortfolio: 'Build Portfolio',
+    buildPortfolioSubtitle: 'AI will build an optimal portfolio for your amount and strategy',
+    enterAmount: 'Investment Amount',
+    amountHint: 'e.g., 10000',
+    chooseStrategy: 'Choose Strategy',
+    strategyConservative: 'Conservative',
+    strategyConservativeDesc: 'Low risk, stable income. Bonds and defensive assets.',
+    strategyModerate: 'Moderate',
+    strategyModerateDesc: 'Balanced growth and protection. Stocks + bonds + alternatives.',
+    strategyAggressive: 'Aggressive',
+    strategyAggressiveDesc: 'Maximum growth. Tech, crypto, emerging markets.',
+    buildingPortfolio: 'Building portfolio...',
+    yourPortfolio: 'Your Portfolio',
+    expectedReturn: 'Expected Return',
+    annualRisk: 'Annual Risk',
+    sharpeRatio: 'Sharpe Ratio',
+    allocation: 'Allocation',
+    ticker: 'Ticker',
+    weight: 'Weight',
+    amount: 'Amount',
+    sector: 'Sector',
+    addToWatchlist: 'Add to Watchlist',
     errorModeUnavailable: 'This mode is not available on your plan.',
     errorLimitReached: 'Analysis limit reached. Upgrade your plan to continue.',
     errorServer: 'Server error',

@@ -2,12 +2,13 @@
 
 ## Обзор
 
-Flutter web проект для AI анализа акций. Отдельный от мобильного приложения investlink, общий API бэкенд.
+Flutter web проект для AI анализа акций. Отдельный продукт от мобильного приложения investlink, общий API бэкенд.
 
-- **Путь:** `/Users/lemon/ai-web/`
+- **Путь:** `/Users/investlinkm4/Develop/web_ai_analyzer/`
 - **Стек:** Flutter web, Dio, flutter_bloc, fl_chart, flutter_markdown, google_fonts (Inter)
 - **Запуск:** `flutter run -d chrome`
 - **Билд:** `flutter build web`
+- **Аналитика:** Amplitude (SDK + Session Replay + Autocapture)
 
 ---
 
@@ -81,13 +82,16 @@ lib/
 │   ├── analysis_repository.dart       # Dio GET /analyze/{ticker}
 │   ├── analysis_cubit.dart            # AnalysisCubit + AnalysisState (idle/loading/loaded/error)
 │   ├── auth_cubit.dart                # AuthCubit + AuthState (mock авторизация)
-│   └── user_plan.dart                 # UserPlan enum (free/pro/premium), PlanInfo, лимиты
+│   ├── user_plan.dart                 # UserPlan enum (free/pro/premium), PlanInfo, лимиты
+│   ├── analytics_service.dart         # Amplitude трекинг (dart:js_interop обёртка)
+│   └── portfolio_mock.dart            # Mock данные для Portfolio Builder (3 стратегии)
 ├── l10n/
 │   └── app_strings.dart               # Двуязычные строки (RU/EN), ModeInfo, HeroRotatingItem
 └── presentation/
     ├── pages/
     │   ├── home_page.dart             # 3-step wizard: hero → режим → тикер → анализ
-    │   ├── result_page.dart           # Результат: app bar, 3 карточки, AI секции, SWOT
+    │   ├── result_page.dart           # Результат: app bar, 3 карточки, AI секции, SWOT, шеринг
+    │   ├── portfolio_page.dart        # AI Portfolio Builder (сумма → стратегия → портфель)
     │   ├── auth_page.dart             # Диалог авторизации (login/register)
     │   └── pricing_page.dart          # Страница тарифов (Free/Pro/Premium)
     └── widgets/
@@ -96,8 +100,35 @@ lib/
         ├── score_gauge.dart           # Полукруглый спидометр 0-100 (CustomPainter)
         ├── indicator_row.dart         # Строка индикатора (label — value)
         ├── ilm_logo.dart              # Анимированный логотип-парусник (CustomPainter)
-        └── how_it_works_section.dart  # Секция "Как это работает" — 3 шага
+        ├── how_it_works_section.dart  # Секция "Как это работает" — 3 шага
+        └── analysis_skeleton.dart     # Skeleton loading для анализа
 ```
+
+---
+
+## Аналитика (Amplitude)
+
+- **SDK:** подключён в `web/index.html` (CDN snippet с Session Replay + Autocapture)
+- **API Key:** `be7957c558a52cf3ac704939f240eec1`
+- **Dart обёртка:** `lib/data/analytics_service.dart` — синглтон через `dart:js_interop`
+
+### Трекаемые события
+
+| Событие | Описание |
+|---------|----------|
+| `mode_selected` | Выбор режима анализа |
+| `ticker_entered` | Ввод тикера |
+| `analysis_started` | Нажатие "Анализировать" |
+| `analysis_completed` | Успешный анализ |
+| `analysis_error` | Ошибка анализа |
+| `analysis_shared` | Шеринг результата |
+| `login` / `logout` | Авторизация |
+| `pricing_viewed` | Просмотр тарифов |
+| `theme_toggled` / `locale_toggled` | Настройки |
+| `portfolio_opened` | Открытие Portfolio Builder |
+| `portfolio_build_started` / `portfolio_build_completed` | Сборка портфеля |
+
+Autocapture: page views, sessions, клики, формы, web vitals, rage clicks, dead clicks.
 
 ---
 
@@ -116,7 +147,7 @@ lib/
 
 | План | Анализов/день | Доступные режимы |
 |------|---------------|------------------|
-| Free | 3 | только `technical` |
+| Free | 3 | все 9 (временно для теста, обычно только `technical`) |
 | Pro | 30 | все 9 режимов |
 | Premium | ∞ | все 9 режимов |
 
@@ -163,18 +194,29 @@ final onToggle = AppThemeScope.of(context).onToggle;
 - **Step 0:** Hero секция с анимированным логотипом + ротация текста, 9 карточек режимов (responsive grid: 3/2/1 колонки)
 - **Step 1:** Поле ввода тикера (крупный центрированный TextField)
 - **Step 2:** Подтверждение — badges с выбранным режимом и тикером, кнопка "Анализировать"
-- App bar: кредиты, авторизация, тарифы, переключатель языка, переключатель темы
+- **Loading:** Skeleton loading — имитация ResultPage с shimmer-плейсхолдерами
+- App bar: портфель, кредиты, авторизация, тарифы, переключатель языка, переключатель темы
+- Логин запрашивается при выборе режима (до ввода тикера), после логина — автопродолжение
 - История анализов (в памяти cubit, не персистентная)
 
 ### ResultPage
-- **Sticky SliverAppBar:** тикер, цена, % изменения, тренд badge, score badge, theme toggle
+- **Sticky SliverAppBar:** тикер, цена, % изменения, тренд badge, score badge, кнопка шеринга, theme toggle
 - **3 pricing-style карточки** (IntrinsicHeight + Row на desktop):
   - Обзор — скор, сигнал, тренд, цена
   - Индикаторы — RSI, SMA, MACD, Bollinger, ATR
   - AI Анализ — список фич
 - **AI Анализ секции:** markdown парсится по `##`/`###` заголовкам → отдельные карточки с иконками (автоподбор по ключевым словам в заголовке)
 - **SWOT:** 4 цветных блока (Strengths, Weaknesses, Opportunities, Threats)
+- **Шеринг:** копирует компактную сводку в буфер обмена
+- **Дисклеймер:** "Не является инвестиционной рекомендацией" внизу
 - **Responsive:** `>960px` → 2 колонки, иначе вертикальный stack
+
+### PortfolioPage (AI Portfolio Builder — mock)
+- **Step 0:** Ввод суммы ($) + выбор стратегии (3 карточки: консервативная/умеренная/агрессивная)
+- **Step 1:** Loading с прогресс баром
+- **Step 2:** Результат — 3 stat карточки (доходность/риск/Sharpe), pie chart, таблица позиций, AI-комментарий
+- Mock данные: 3 реалистичных портфеля (6-7 ETF), готовы к замене на реальный API
+- Точка входа: кнопка "Собрать портфель" в app bar на главной
 
 ### AuthPage (диалог)
 - Переключение Login/Register
@@ -188,6 +230,16 @@ final onToggle = AppThemeScope.of(context).onToggle;
 
 ---
 
+## SEO
+
+- **Title:** "ILM — AI-анализ акций | Citadel · Bridgewater · BlackRock"
+- **Open Graph:** og:title, og:description, og:image — превью для Telegram/WhatsApp/Facebook
+- **Twitter Card:** summary_large_image
+- **Meta:** description, keywords, theme-color, viewport
+- **TODO:** og:image баннер 1200x630, og:url когда будет домен, sitemap, robots.txt
+
+---
+
 ## Связь с мобильным приложением
 
 Мобильный модуль `invl_ai_analyze` в `investlink-mobile-app/modules/invl_ai_analyze/` использует тот же API.
@@ -198,6 +250,8 @@ final onToggle = AppThemeScope.of(context).onToggle;
 - Детальный экран с табами (Обзор/Индикаторы/AI/SWOT)
 - UI через дизайн-систему investlink (AppColorScheme, AppTextScheme)
 
+Стратегия: ILM web — отдельный продукт + лид-генератор для мобилки investlink.
+
 ---
 
 ## Conventions
@@ -205,7 +259,9 @@ final onToggle = AppThemeScope.of(context).onToggle;
 - Шрифт: **Inter** (Google Fonts)
 - Цвета: всегда через `AppThemeScope.of(context).colors` — никогда хардкод
 - Строки: всегда через `AppThemeScope.of(context).strings` — для двуязычности
-- Стиль вдохновлён: kapitalist.finance (минимализм, карточки с бордерами)
+- Стиль: чёрно-белый минимализм (kapitalist.finance), без цветных акцентов в UI элементах
+- Описания режимов: фокус на ценность для клиента ("что получишь"), не на технические термины
 - UI тексты двуязычные (RU/EN)
 - Responsive breakpoint: 960px
 - Авторизация пока mock — при интеграции заменить `auth_cubit.dart`
+- Дефолтный режим анализа: `full` (если не выбран)

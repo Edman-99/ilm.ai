@@ -5,7 +5,7 @@
     "display": "standalone",
     "background_color": "#000000",
     "theme_color": "#000000",
-    "description": "ILM — AI Stock Analysis",
+    "description": "AI-анализ акций по методологиям топ-фондов мира. 9 режимов анализа бесплатно.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

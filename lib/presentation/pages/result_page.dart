@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 
+import 'package:ai_stock_analyzer/data/analytics_service.dart';
 import 'package:ai_stock_analyzer/data/stock_analysis_dto.dart';
 import 'package:ai_stock_analyzer/l10n/app_strings.dart';
 import 'package:ai_stock_analyzer/theme/app_theme.dart';
@@ -51,6 +53,19 @@ class ResultPage extends StatelessWidget {
                         const SizedBox(height: 20),
                         _SwotCompact(c: c, s: s),
                       ],
+                      const SizedBox(height: 32),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Text(
+                          s.disclaimer,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: c.textSecondary.withValues(alpha: 0.6),
+                            height: 1.5,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -77,6 +92,35 @@ class _ResultAppBar extends StatelessWidget {
   final AppColors c;
   final AppStrings s;
   final VoidCallback onToggle;
+
+  void _share(BuildContext context) {
+    final changePrefix = analysis.change1m >= 0 ? '+' : '';
+    final signalText = s.signal(analysis.score);
+
+    final text = '''${analysis.ticker} · \$${analysis.price.toStringAsFixed(2)} · $changePrefix${analysis.change1m.toStringAsFixed(1)}%
+${s.score}: ${analysis.score}/100 — $signalText
+${s.trend}: ${analysis.trend}
+RSI: ${analysis.rsi.toStringAsFixed(1)} · MACD: ${analysis.macd.toStringAsFixed(4)}
+${analysis.modeDescription}
+
+— ILM AI Stock Analyzer''';
+
+    Clipboard.setData(ClipboardData(text: text));
+    AnalyticsService.instance.track('analysis_shared', {
+      'ticker': analysis.ticker,
+      'mode': analysis.mode,
+      'score': analysis.score,
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(s.copied),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+        width: 200,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -136,6 +180,15 @@ class _ResultAppBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
+          IconButton(
+            onPressed: () => _share(context),
+            tooltip: s.share,
+            icon: Icon(
+              Icons.share_rounded,
+              size: 18,
+              color: c.textSecondary,
+            ),
+          ),
           IconButton(
             onPressed: onToggle,
             icon: Icon(

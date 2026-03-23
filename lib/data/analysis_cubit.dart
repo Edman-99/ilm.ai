@@ -22,7 +22,7 @@ class AnalysisErrorKey {
 class AnalysisState extends Equatable {
   const AnalysisState({
     this.status = AnalysisStatus.idle,
-    this.selectedMode = '',
+    this.selectedMode = 'full',
     this.ticker = '',
     this.result,
     this.errorKey,
@@ -100,6 +100,11 @@ class AnalysisCubit extends Cubit<AnalysisState> {
   Future<void> analyze() async {
     final ticker = state.ticker.trim();
     if (ticker.isEmpty) return;
+
+    // Default to 'full' if no mode selected
+    if (state.selectedMode.isEmpty) {
+      emit(state.copyWith(selectedMode: 'full'));
+    }
 
     if (!state.isModeAvailable(state.selectedMode)) {
       emit(state.copyWith(

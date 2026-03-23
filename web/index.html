@@ -18,7 +18,24 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="ILM — AI Stock Analysis">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="AI-анализ акций по методологиям Citadel, Bridgewater, BlackRock, Morgan Stanley. 9 режимов анализа — от точек входа до оценки рисков. Бесплатно.">
+  <meta name="keywords" content="AI stock analysis, анализ акций, технический анализ, DCF, SWOT, инвестиции, трейдинг">
+  <meta name="author" content="ILM">
+  <meta name="theme-color" content="#000000">
+
+  <!-- Open Graph (Telegram, WhatsApp, Facebook, LinkedIn) -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="ILM — AI-анализ акций за 1 минуту">
+  <meta property="og:description" content="9 методологий топ-фондов мира в одном клике. Технический анализ, DCF оценка, риски, дивиденды, конкуренты — всё бесплатно.">
+  <meta property="og:image" content="icons/Icon-512.png">
+  <meta property="og:locale" content="ru_RU">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ILM — AI-анализ акций за 1 минуту">
+  <meta name="twitter:description" content="9 методологий топ-фондов мира в одном клике. Бесплатно.">
+  <meta name="twitter:image" content="icons/Icon-512.png">
 
   <!-- iOS meta tags & icons -->
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -29,8 +46,52 @@
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>ILM</title>
+  <title>ILM — AI-анализ акций | Citadel · Bridgewater · BlackRock</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- Amplitude SDK + Session Replay + Autocapture -->
+  <script src="https://cdn.amplitude.com/script/be7957c558a52cf3ac704939f240eec1.js"></script>
+  <script>
+    window.amplitude.add(window.sessionReplay.plugin({sampleRate: 1}));
+    window.amplitude.init('be7957c558a52cf3ac704939f240eec1', {
+      "fetchRemoteConfig": true,
+      "autocapture": {
+        "attribution": true,
+        "fileDownloads": true,
+        "formInteractions": true,
+        "pageViews": true,
+        "sessions": true,
+        "elementInteractions": true,
+        "networkTracking": true,
+        "webVitals": true,
+        "frustrationInteractions": {
+          "thrashedCursor": true,
+          "errorClicks": true,
+          "deadClicks": true,
+          "rageClicks": true
+        }
+      }
+    });
+
+    function amplitudeTrack(eventName, propsJson) {
+      if (window.amplitude) {
+        var props = propsJson ? JSON.parse(propsJson) : {};
+        window.amplitude.track(eventName, props);
+      }
+    }
+
+    function amplitudeIdentify(userId) {
+      if (window.amplitude) {
+        window.amplitude.setUserId(userId);
+      }
+    }
+
+    function amplitudeReset() {
+      if (window.amplitude) {
+        window.amplitude.reset();
+      }
+    }
+  </script>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>
