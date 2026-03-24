@@ -1,12 +1,16 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 
+import 'package:ai_stock_analyzer/data/analysis_cubit.dart';
 import 'package:ai_stock_analyzer/data/analytics_service.dart';
-import 'package:ai_stock_analyzer/data/portfolio_mock.dart';
+import 'package:ai_stock_analyzer/data/portfolio_result_dto.dart';
 import 'package:ai_stock_analyzer/l10n/app_strings.dart';
 import 'package:ai_stock_analyzer/theme/app_theme.dart';
+
+enum PortfolioStrategy { conservative, moderate, aggressive }
 
 class PortfolioPage extends StatefulWidget {
   const PortfolioPage({super.key});
@@ -18,10 +22,9 @@ class PortfolioPage extends StatefulWidget {
 class _PortfolioPageState extends State<PortfolioPage> {
   final _amountController = TextEditingController(text: '10000');
   PortfolioStrategy? _strategy;
-  PortfolioResult? _result;
-
-  // 0 = input, 1 = loading, 2 = result
-  int _step = 0;
+  bool _loading = false;
+  String? _error;
+  PortfolioResultDto? _result;
 
   @override
   void dispose() {
@@ -42,29 +45,43 @@ class _PortfolioPageState extends State<PortfolioPage> {
       'strategy': _strategy!.name,
     });
 
-    setState(() => _step = 1);
-
-    // Fake delay
-    await Future<void>.delayed(const Duration(seconds: 2));
-
-    if (!mounted) return;
-
     setState(() {
-      _result = mockPortfolios[_strategy!];
-      _step = 2;
+      _loading = true;
+      _error = null;
     });
 
-    AnalyticsService.instance.track('portfolio_build_completed', {
-      'amount': _amount,
-      'strategy': _strategy!.name,
-    });
+    try {
+      final cubit = context.read<AnalysisCubit>();
+      final result = await cubit.repository.buildPortfolio(
+        amount: _amount,
+        riskStrategy: _strategy!.name,
+      );
+
+      if (!mounted) return;
+
+      AnalyticsService.instance.track('portfolio_build_completed', {
+        'amount': _amount,
+        'strategy': _strategy!.name,
+        'positions_count': result.allocations.length,
+      });
+
+      setState(() {
+        _loading = false;
+        _result = result;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e.toString();
+      });
+    }
   }
 
   void _reset() {
     setState(() {
-      _step = 0;
       _result = null;
-      _strategy = null;
+      _error = null;
     });
   }
 
@@ -81,16 +98,30 @@ class _PortfolioPageState extends State<PortfolioPage> {
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: c.textPrimary),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () {
+            if (_result != null) {
+              _reset();
+            } else {
+              Navigator.of(context).pop();
+            }
+          },
         ),
         title: Text(
-          s.buildPortfolio,
+          _result != null ? s.yourPortfolio : s.buildPortfolio,
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w700,
             color: c.textPrimary,
           ),
         ),
+        actions: [
+          if (_result != null)
+            IconButton(
+              icon: Icon(Icons.refresh_rounded, color: c.textSecondary),
+              onPressed: _reset,
+              tooltip: s.back,
+            ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Divider(height: 1, color: c.border),
@@ -104,16 +135,16 @@ class _PortfolioPageState extends State<PortfolioPage> {
           opacity: animation,
           child: child,
         ),
-        child: _step == 0
-            ? _buildInput(c, s)
-            : _step == 1
+        child: _result != null
+            ? _PortfolioResult(key: const ValueKey(2), result: _result!, c: c, s: s)
+            : _loading
                 ? _buildLoading(c, s)
-                : _buildResult(c, s),
+                : _buildInput(c, s),
       ),
     );
   }
 
-  // ── Step 0: Input ──
+  // ── Input ──
 
   Widget _buildInput(AppColors c, AppStrings s) {
     return SingleChildScrollView(
@@ -239,6 +270,24 @@ class _PortfolioPageState extends State<PortfolioPage> {
 
                 const SizedBox(height: 32),
 
+                // Error
+                if (_error != null) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: c.red.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: c.red.withValues(alpha: 0.2)),
+                    ),
+                    child: Text(
+                      s.errorGeneric,
+                      style: TextStyle(fontSize: 14, color: c.red),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
                 // Build button
                 SizedBox(
                   width: double.infinity,
@@ -259,7 +308,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
     );
   }
 
-  // ── Step 1: Loading ──
+  // ── Loading ──
 
   Widget _buildLoading(AppColors c, AppStrings s) {
     return Center(
@@ -302,106 +351,59 @@ class _PortfolioPageState extends State<PortfolioPage> {
       ),
     );
   }
+}
 
-  // ── Step 2: Result ──
+// ══════════════════════════════════════════════
+// ── Portfolio Result ──
+// ══════════════════════════════════════════════
 
-  Widget _buildResult(AppColors c, AppStrings s) {
-    final result = _result!;
-    final totalAmount = _amount;
+class _PortfolioResult extends StatelessWidget {
+  const _PortfolioResult({
+    super.key,
+    required this.result,
+    required this.c,
+    required this.s,
+  });
+
+  final PortfolioResultDto result;
+  final AppColors c;
+  final AppStrings s;
+
+  @override
+  Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
     final isWide = width > 960;
 
     return SingleChildScrollView(
-      key: const ValueKey(2),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1100),
           child: Padding(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 48),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header
-                Text(
-                  s.yourPortfolio,
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                    color: c.textPrimary,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '\$${totalAmount.toStringAsFixed(0)}',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: c.textSecondary,
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                // Stats cards
-                if (isWide)
-                  IntrinsicHeight(
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: _StatCard(
-                            label: s.expectedReturn,
-                            value: '${result.expectedReturn.toStringAsFixed(1)}%',
-                            color: c.green,
-                            c: c,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _StatCard(
-                            label: s.annualRisk,
-                            value: '${result.risk.toStringAsFixed(1)}%',
-                            color: c.red,
-                            c: c,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _StatCard(
-                            label: s.sharpeRatio,
-                            value: result.sharpe.toStringAsFixed(2),
-                            color: c.accent,
-                            c: c,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                else ...[
-                  _StatCard(label: s.expectedReturn, value: '${result.expectedReturn.toStringAsFixed(1)}%', color: c.green, c: c),
-                  const SizedBox(height: 12),
-                  _StatCard(label: s.annualRisk, value: '${result.risk.toStringAsFixed(1)}%', color: c.red, c: c),
-                  const SizedBox(height: 12),
-                  _StatCard(label: s.sharpeRatio, value: result.sharpe.toStringAsFixed(2), color: c.accent, c: c),
-                ],
-
+                // Metric cards
+                _MetricCards(result: result, isWide: isWide, c: c, s: s),
                 const SizedBox(height: 32),
 
-                // Pie chart + positions table
+                // Pie chart + Allocation table
                 if (isWide)
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Pie chart
-                      SizedBox(
-                        width: 320,
-                        child: _PieChartCard(result: result, c: c, s: s),
-                      ),
-                      const SizedBox(width: 20),
-                      // Positions
                       Expanded(
-                        child: _PositionsCard(
-                          result: result,
-                          totalAmount: totalAmount,
+                        flex: 2,
+                        child: _AllocationTable(
+                          allocations: result.allocations,
+                          c: c,
+                          s: s,
+                        ),
+                      ),
+                      const SizedBox(width: 24),
+                      Expanded(
+                        child: _PieChartCard(
+                          allocations: result.allocations,
                           c: c,
                           s: s,
                         ),
@@ -409,11 +411,14 @@ class _PortfolioPageState extends State<PortfolioPage> {
                     ],
                   )
                 else ...[
-                  _PieChartCard(result: result, c: c, s: s),
-                  const SizedBox(height: 20),
-                  _PositionsCard(
-                    result: result,
-                    totalAmount: totalAmount,
+                  _PieChartCard(
+                    allocations: result.allocations,
+                    c: c,
+                    s: s,
+                  ),
+                  const SizedBox(height: 24),
+                  _AllocationTable(
+                    allocations: result.allocations,
                     c: c,
                     s: s,
                   ),
@@ -421,47 +426,18 @@ class _PortfolioPageState extends State<PortfolioPage> {
 
                 const SizedBox(height: 32),
 
-                // AI analysis
-                _AnalysisCard(analysis: result.analysis, c: c),
+                // AI Analysis (markdown)
+                if (result.analysis.isNotEmpty)
+                  _AnalysisCard(analysis: result.analysis, c: c, s: s),
 
                 const SizedBox(height: 24),
 
                 // Disclaimer
                 Text(
                   s.disclaimer,
+                  style: TextStyle(fontSize: 12, color: c.textSecondary.withValues(alpha: 0.5)),
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: c.textSecondary.withValues(alpha: 0.6),
-                    height: 1.5,
-                  ),
                 ),
-
-                const SizedBox(height: 24),
-
-                // Reset button
-                Center(
-                  child: SizedBox(
-                    width: 300,
-                    height: 48,
-                    child: TextButton.icon(
-                      onPressed: _reset,
-                      style: TextButton.styleFrom(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          side: BorderSide(color: c.border),
-                        ),
-                      ),
-                      icon: Icon(Icons.refresh_rounded, size: 18, color: c.textSecondary),
-                      label: Text(
-                        s.back,
-                        style: TextStyle(fontSize: 15, color: c.textSecondary),
-                      ),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 48),
               ],
             ),
           ),
@@ -471,7 +447,541 @@ class _PortfolioPageState extends State<PortfolioPage> {
   }
 }
 
-// ── Strategy card ──
+// ── Metric Cards ──
+
+class _MetricCards extends StatelessWidget {
+  const _MetricCards({
+    required this.result,
+    required this.isWide,
+    required this.c,
+    required this.s,
+  });
+
+  final PortfolioResultDto result;
+  final bool isWide;
+  final AppColors c;
+  final AppStrings s;
+
+  @override
+  Widget build(BuildContext context) {
+    final cards = [
+      _MetricItem(
+        label: s.expectedReturn,
+        value: '${result.expectedReturnMin.toStringAsFixed(0)}–${result.expectedReturnMax.toStringAsFixed(0)}%',
+        icon: Icons.trending_up_rounded,
+        color: c.green,
+      ),
+      _MetricItem(
+        label: s.maxDrawdown,
+        value: '−${result.maxDrawdown.toStringAsFixed(0)}%',
+        icon: Icons.trending_down_rounded,
+        color: c.red,
+      ),
+      _MetricItem(
+        label: s.rebalancing,
+        value: s.rebalancingLabel(result.rebalancingFrequency),
+        icon: Icons.sync_rounded,
+        color: c.accent,
+      ),
+      _MetricItem(
+        label: s.amount,
+        value: '\$${_formatNumber(result.totalAmount)}',
+        icon: Icons.account_balance_wallet_rounded,
+        color: c.textPrimary,
+      ),
+    ];
+
+    if (isWide) {
+      return Row(
+        children: [
+          for (var i = 0; i < cards.length; i++) ...[
+            if (i > 0) const SizedBox(width: 16),
+            Expanded(child: _buildCard(cards[i])),
+          ],
+        ],
+      );
+    }
+
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(child: _buildCard(cards[0])),
+            const SizedBox(width: 12),
+            Expanded(child: _buildCard(cards[1])),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(child: _buildCard(cards[2])),
+            const SizedBox(width: 12),
+            Expanded(child: _buildCard(cards[3])),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCard(_MetricItem item) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: c.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: c.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(item.icon, color: item.color, size: 22),
+          const SizedBox(height: 12),
+          Text(
+            item.value,
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: c.textPrimary,
+              letterSpacing: -0.5,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            item.label,
+            style: TextStyle(fontSize: 13, color: c.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MetricItem {
+  const _MetricItem({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+}
+
+// ── Pie Chart ──
+
+const _chartColors = [
+  Color(0xFF3B82F6), // blue
+  Color(0xFF10B981), // green
+  Color(0xFFF59E0B), // amber
+  Color(0xFFEF4444), // red
+  Color(0xFF8B5CF6), // purple
+  Color(0xFF06B6D4), // cyan
+  Color(0xFFF97316), // orange
+  Color(0xFFEC4899), // pink
+  Color(0xFF14B8A6), // teal
+  Color(0xFF6366F1), // indigo
+  Color(0xFF84CC16), // lime
+  Color(0xFFD946EF), // fuchsia
+  Color(0xFF78716C), // stone
+  Color(0xFF0EA5E9), // sky
+  Color(0xFFE11D48), // rose
+];
+
+class _PieChartCard extends StatelessWidget {
+  const _PieChartCard({
+    required this.allocations,
+    required this.c,
+    required this.s,
+  });
+
+  final List<PortfolioAllocation> allocations;
+  final AppColors c;
+  final AppStrings s;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: c.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: c.border),
+      ),
+      child: Column(
+        children: [
+          Text(
+            s.allocation,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: c.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            height: 200,
+            child: PieChart(
+              PieChartData(
+                sectionsSpace: 2,
+                centerSpaceRadius: 40,
+                sections: [
+                  for (var i = 0; i < allocations.length; i++)
+                    PieChartSectionData(
+                      value: allocations[i].percentage,
+                      color: _chartColors[i % _chartColors.length],
+                      radius: 50,
+                      title: '${allocations[i].percentage.toStringAsFixed(0)}%',
+                      titleStyle: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                      titlePositionPercentageOffset: 0.6,
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          // Legend
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              for (var i = 0; i < allocations.length; i++)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: _chartColors[i % _chartColors.length],
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      allocations[i].ticker,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: c.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Allocation Table ──
+
+class _AllocationTable extends StatelessWidget {
+  const _AllocationTable({
+    required this.allocations,
+    required this.c,
+    required this.s,
+  });
+
+  final List<PortfolioAllocation> allocations;
+  final AppColors c;
+  final AppStrings s;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: c.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: c.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: c.border)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: Text(
+                    s.ticker,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: c.textSecondary,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    s.assetClass,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: c.textSecondary,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 60,
+                  child: Text(
+                    s.weight,
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: c.textSecondary,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 80,
+                  child: Text(
+                    s.amount,
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: c.textSecondary,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 70,
+                  child: Text(
+                    s.shares,
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: c.textSecondary,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Rows
+          for (var i = 0; i < allocations.length; i++)
+            _AllocationRow(
+              allocation: allocations[i],
+              color: _chartColors[i % _chartColors.length],
+              isLast: i == allocations.length - 1,
+              c: c,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AllocationRow extends StatelessWidget {
+  const _AllocationRow({
+    required this.allocation,
+    required this.color,
+    required this.isLast,
+    required this.c,
+  });
+
+  final PortfolioAllocation allocation;
+  final Color color;
+  final bool isLast;
+  final AppColors c;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      decoration: BoxDecoration(
+        border: isLast ? null : Border(bottom: BorderSide(color: c.border.withValues(alpha: 0.5))),
+      ),
+      child: Row(
+        children: [
+          // Ticker + Name
+          Expanded(
+            flex: 3,
+            child: Row(
+              children: [
+                Container(
+                  width: 4,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        allocation.ticker,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: c.textPrimary,
+                        ),
+                      ),
+                      Text(
+                        allocation.name,
+                        style: TextStyle(fontSize: 12, color: c.textSecondary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Asset class
+          Expanded(
+            flex: 2,
+            child: Text(
+              allocation.assetClass,
+              style: TextStyle(fontSize: 13, color: c.textSecondary),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          // Weight
+          SizedBox(
+            width: 60,
+            child: Text(
+              '${allocation.percentage.toStringAsFixed(1)}%',
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: c.textPrimary,
+              ),
+            ),
+          ),
+          // Amount
+          SizedBox(
+            width: 80,
+            child: Text(
+              '\$${_formatNumber(allocation.amount)}',
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: c.textPrimary,
+              ),
+            ),
+          ),
+          // Shares
+          SizedBox(
+            width: 70,
+            child: Text(
+              allocation.shares.toStringAsFixed(2),
+              textAlign: TextAlign.right,
+              style: TextStyle(fontSize: 13, color: c.textSecondary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── AI Analysis Card ──
+
+class _AnalysisCard extends StatelessWidget {
+  const _AnalysisCard({
+    required this.analysis,
+    required this.c,
+    required this.s,
+  });
+
+  final String analysis;
+  final AppColors c;
+  final AppStrings s;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: c.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: c.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.auto_awesome_rounded, color: c.accent, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                s.portfolioAnalysis,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: c.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          MarkdownBody(
+            data: analysis,
+            styleSheet: MarkdownStyleSheet(
+              p: TextStyle(fontSize: 14, color: c.textPrimary, height: 1.6),
+              h2: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: c.textPrimary,
+              ),
+              h3: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: c.textPrimary,
+              ),
+              listBullet: TextStyle(fontSize: 14, color: c.textPrimary),
+              strong: TextStyle(fontWeight: FontWeight.w700, color: c.textPrimary),
+              em: TextStyle(fontStyle: FontStyle.italic, color: c.textSecondary),
+              blockquoteDecoration: BoxDecoration(
+                color: c.accent.withValues(alpha: 0.05),
+                border: Border(left: BorderSide(color: c.accent, width: 3)),
+              ),
+              code: TextStyle(
+                fontSize: 13,
+                color: c.accent,
+                backgroundColor: c.accent.withValues(alpha: 0.08),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Strategy Card ──
 
 class _StrategyCard extends StatefulWidget {
   const _StrategyCard({
@@ -569,335 +1079,20 @@ class _StrategyCardState extends State<_StrategyCard> {
   }
 }
 
-// ── Stat card ──
+// ── Helpers ──
 
-class _StatCard extends StatelessWidget {
-  const _StatCard({
-    required this.label,
-    required this.value,
-    required this.color,
-    required this.c,
-  });
-
-  final String label;
-  final String value;
-  final Color color;
-  final AppColors c;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: c.bg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(fontSize: 13, color: c.textSecondary),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.w800,
-              color: color,
-              letterSpacing: -0.5,
-            ),
-          ),
-        ],
-      ),
-    );
+String _formatNumber(double value) {
+  if (value >= 1000000) {
+    return '${(value / 1000000).toStringAsFixed(1)}M';
   }
-}
-
-// ── Pie chart card ──
-
-class _PieChartCard extends StatelessWidget {
-  const _PieChartCard({
-    required this.result,
-    required this.c,
-    required this.s,
-  });
-
-  final PortfolioResult result;
-  final AppColors c;
-  final AppStrings s;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: c.bg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.border),
-      ),
-      child: Column(
-        children: [
-          Text(
-            s.allocation,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: c.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 20),
-          SizedBox(
-            height: 200,
-            child: PieChart(
-              PieChartData(
-                sectionsSpace: 2,
-                centerSpaceRadius: 40,
-                sections: result.positions.map((p) {
-                  return PieChartSectionData(
-                    value: p.weight * 100,
-                    color: Color(p.color),
-                    radius: 50,
-                    title: '${(p.weight * 100).toStringAsFixed(0)}%',
-                    titleStyle: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          // Legend
-          ...result.positions.map(
-            (p) => Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Row(
-                children: [
-                  Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: Color(p.color),
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      p.ticker,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: c.textPrimary,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    '${(p.weight * 100).toStringAsFixed(0)}%',
-                    style: TextStyle(fontSize: 13, color: c.textSecondary),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+  if (value >= 1000) {
+    final str = value.toStringAsFixed(0);
+    final buf = StringBuffer();
+    for (var i = 0; i < str.length; i++) {
+      if (i > 0 && (str.length - i) % 3 == 0) buf.write(',');
+      buf.write(str[i]);
+    }
+    return buf.toString();
   }
-}
-
-// ── Positions table ──
-
-class _PositionsCard extends StatelessWidget {
-  const _PositionsCard({
-    required this.result,
-    required this.totalAmount,
-    required this.c,
-    required this.s,
-  });
-
-  final PortfolioResult result;
-  final double totalAmount;
-  final AppColors c;
-  final AppStrings s;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: c.bg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Row(
-            children: [
-              Expanded(
-                flex: 3,
-                child: Text(s.ticker, style: _headerStyle),
-              ),
-              Expanded(
-                flex: 2,
-                child: Text(s.sector, style: _headerStyle, textAlign: TextAlign.left),
-              ),
-              Expanded(
-                child: Text(s.weight, style: _headerStyle, textAlign: TextAlign.right),
-              ),
-              Expanded(
-                flex: 2,
-                child: Text(s.amount, style: _headerStyle, textAlign: TextAlign.right),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Divider(color: c.border, height: 1),
-          const SizedBox(height: 8),
-          // Rows
-          ...result.positions.map(
-            (p) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: Color(p.color),
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                p.ticker,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: c.textPrimary,
-                                ),
-                              ),
-                              Text(
-                                p.name,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: c.textSecondary,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      p.sector,
-                      style: TextStyle(fontSize: 13, color: c.textSecondary),
-                    ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      '${(p.weight * 100).toStringAsFixed(0)}%',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: c.textPrimary,
-                      ),
-                      textAlign: TextAlign.right,
-                    ),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      '\$${p.amount(totalAmount).toStringAsFixed(0)}',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: c.textPrimary,
-                      ),
-                      textAlign: TextAlign.right,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  TextStyle get _headerStyle => TextStyle(
-        fontSize: 12,
-        fontWeight: FontWeight.w500,
-        color: c.textSecondary,
-      );
-}
-
-// ── AI analysis card ──
-
-class _AnalysisCard extends StatelessWidget {
-  const _AnalysisCard({required this.analysis, required this.c});
-
-  final String analysis;
-  final AppColors c;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: c.bg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.border),
-      ),
-      child: MarkdownBody(
-        data: analysis,
-        shrinkWrap: true,
-        styleSheet: MarkdownStyleSheet(
-          h2: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            color: c.textPrimary,
-          ),
-          h3: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-            color: c.textPrimary,
-          ),
-          p: TextStyle(
-            fontSize: 14,
-            color: c.textPrimary,
-            height: 1.7,
-          ),
-          strong: TextStyle(
-            fontWeight: FontWeight.w700,
-            color: c.textPrimary,
-          ),
-          listBullet: TextStyle(color: c.textSecondary),
-          listBulletPadding: const EdgeInsets.only(right: 8),
-          blockSpacing: 12,
-        ),
-      ),
-    );
-  }
+  return value.toStringAsFixed(2);
 }

@@ -133,6 +133,15 @@ class AppStrings {
     required this.amount,
     required this.sector,
     required this.addToWatchlist,
+    required this.maxDrawdown,
+    required this.rebalancing,
+    required this.rebalancingQuarterly,
+    required this.rebalancingSemiAnnual,
+    required this.shares,
+    required this.priceLabel,
+    required this.name,
+    required this.assetClass,
+    required this.portfolioAnalysis,
     // Errors (cubit)
     required this.errorModeUnavailable,
     required this.errorLimitReached,
@@ -211,6 +220,9 @@ class AppStrings {
   String dailyLimitLabel(int limit) =>
       limit < 0 ? unlimitedLabel : '$limit $analysesPerDay';
 
+  String rebalancingLabel(String frequency) =>
+      frequency == 'semi-annual' ? rebalancingSemiAnnual : rebalancingQuarterly;
+
   // Result page
   final String overview;
   final String quickVerdict;
@@ -268,6 +280,15 @@ class AppStrings {
   final String amount;
   final String sector;
   final String addToWatchlist;
+  final String maxDrawdown;
+  final String rebalancing;
+  final String rebalancingQuarterly;
+  final String rebalancingSemiAnnual;
+  final String shares;
+  final String priceLabel;
+  final String name;
+  final String assetClass;
+  final String portfolioAnalysis;
 
   // Score
   final String outOf100;
@@ -485,6 +506,15 @@ class AppStrings {
     amount: 'Сумма',
     sector: 'Сектор',
     addToWatchlist: 'В Watchlist',
+    maxDrawdown: 'Макс. просадка',
+    rebalancing: 'Ребалансировка',
+    rebalancingQuarterly: 'Ежеквартально',
+    rebalancingSemiAnnual: 'Раз в полгода',
+    shares: 'Кол-во',
+    priceLabel: 'Цена',
+    name: 'Название',
+    assetClass: 'Класс актива',
+    portfolioAnalysis: 'Анализ портфеля',
     errorModeUnavailable: 'Этот режим недоступен на вашем тарифе.',
     errorLimitReached: 'Лимит анализов исчерпан. Обновите тариф для продолжения.',
     errorServer: 'Ошибка сервера',
@@ -686,6 +716,15 @@ class AppStrings {
     amount: 'Amount',
     sector: 'Sector',
     addToWatchlist: 'Add to Watchlist',
+    maxDrawdown: 'Max Drawdown',
+    rebalancing: 'Rebalancing',
+    rebalancingQuarterly: 'Quarterly',
+    rebalancingSemiAnnual: 'Semi-annual',
+    shares: 'Shares',
+    priceLabel: 'Price',
+    name: 'Name',
+    assetClass: 'Asset Class',
+    portfolioAnalysis: 'Portfolio Analysis',
     errorModeUnavailable: 'This mode is not available on your plan.',
     errorLimitReached: 'Analysis limit reached. Upgrade your plan to continue.',
     errorServer: 'Server error',
