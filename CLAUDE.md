@@ -23,6 +23,7 @@ Flutter web проект для AI анализа акций. Отдельный
 | Метод | Путь | Описание |
 |-------|------|----------|
 | GET | `/analyze/{ticker}?mode={mode}` | Анализ одного тикера |
+| POST | `/analyze/portfolio-builder` | Построение портфеля (amount + risk_strategy) |
 | GET | `/modes` | Список режимов |
 | POST | `/auth/register` | Регистрация пользователя |
 | POST | `/auth/login` | Авторизация пользователя |
@@ -64,9 +65,35 @@ Flutter web проект для AI анализа акций. Отдельный
 }
 ```
 
+### Ответ JSON (portfolio-builder)
+
+```json
+{
+  "strategy": "moderate",
+  "total_amount": 10000,
+  "expected_return_min": 8.5,
+  "expected_return_max": 12.3,
+  "max_drawdown": -15.2,
+  "rebalancing_frequency": "quarterly",
+  "allocations": [
+    {
+      "ticker": "AAPL",
+      "name": "Apple Inc.",
+      "asset_class": "US Large Cap",
+      "percentage": 20.0,
+      "amount": 2000.0,
+      "shares": 10.5,
+      "price": 190.50
+    }
+  ],
+  "analysis": "## Markdown анализ портфеля..."
+}
+```
+
 ### Заголовки
 
 - `ngrok-skip-browser-warning: true` — **обязателен** для обхода ngrok interstitial
+- `Authorization: Bearer <jwt_token>` — автоматически добавляется после login/register
 
 ---
 
@@ -74,17 +101,17 @@ Flutter web проект для AI анализа акций. Отдельный
 
 ```
 lib/
-├── main.dart                          # Entry point, BlocProviders (Analysis + Auth), ThemeNotifier
+├── main.dart                          # Entry point, единый Dio, BlocProviders (Analysis + Auth), ThemeNotifier
 ├── theme/
 │   └── app_theme.dart                 # AppColors (light/dark), ThemeNotifier (isDark + locale), AppThemeScope
 ├── data/
 │   ├── stock_analysis_dto.dart        # Модель ответа API (fromJson, signal, isBullish)
-│   ├── analysis_repository.dart       # Dio GET /analyze/{ticker}
+│   ├── analysis_repository.dart       # Dio: GET /analyze/{ticker}, POST /analyze/portfolio-builder
 │   ├── analysis_cubit.dart            # AnalysisCubit + AnalysisState (idle/loading/loaded/error)
-│   ├── auth_cubit.dart                # AuthCubit + AuthState (mock авторизация)
+│   ├── auth_cubit.dart                # AuthCubit + AuthState (реальный API, JWT токен)
 │   ├── user_plan.dart                 # UserPlan enum (free/pro/premium), PlanInfo, лимиты
 │   ├── analytics_service.dart         # Amplitude трекинг (dart:js_interop обёртка)
-│   └── portfolio_mock.dart            # Mock данные для Portfolio Builder (3 стратегии)
+│   └── portfolio_result_dto.dart      # PortfolioResultDto + PortfolioAllocation (fromJson)
 ├── l10n/
 │   └── app_strings.dart               # Двуязычные строки (RU/EN), ModeInfo, HeroRotatingItem
 └── presentation/
@@ -134,14 +161,15 @@ Autocapture: page views, sessions, клики, формы, web vitals, rage clic
 
 ## Авторизация и тарифы
 
-### AuthCubit (mock, готов к интеграции с бэкендом)
+### AuthCubit (реальный API)
 
-Состояния: `unauthenticated` → `loading` → `authenticated` / `error`
+Интегрирован с бэкендом. JWT аутентификация.
 
-Тестовые пользователи:
-- `free@test.com:123` → Free план
-- `pro@test.com:123` → Pro план
-- `premium@test.com:123` → Premium план
+- Единый `Dio` инстанс создаётся в `main.dart` и шарится между `AuthCubit` и `AnalysisCubit`
+- После login/register токен сохраняется в `_token` и автоматически добавляется в заголовки Dio (`Authorization: Bearer`)
+- Logout очищает токен из заголовков
+- Ошибки маппятся по HTTP статусам: 404→accountNotFound, 401→wrongPassword, 409→emailTaken
+- Состояния: `unauthenticated` → `loading` → `authenticated` / `error`
 
 ### Тарифные планы (UserPlan)
 
@@ -211,11 +239,12 @@ final onToggle = AppThemeScope.of(context).onToggle;
 - **Дисклеймер:** "Не является инвестиционной рекомендацией" внизу
 - **Responsive:** `>960px` → 2 колонки, иначе вертикальный stack
 
-### PortfolioPage (AI Portfolio Builder — mock)
+### PortfolioPage (AI Portfolio Builder — реальный API)
 - **Step 0:** Ввод суммы ($) + выбор стратегии (3 карточки: консервативная/умеренная/агрессивная)
 - **Step 1:** Loading с прогресс баром
-- **Step 2:** Результат — 3 stat карточки (доходность/риск/Sharpe), pie chart, таблица позиций, AI-комментарий
-- Mock данные: 3 реалистичных портфеля (6-7 ETF), готовы к замене на реальный API
+- **Step 2:** Результат — stat карточки (доходность/риск/drawdown), pie chart, таблица позиций (акции+ETF), AI-комментарий
+- API: POST `/analyze/portfolio-builder` (amount + risk_strategy) → `PortfolioResultDto`
+- Модель: `portfolio_result_dto.dart` — PortfolioResultDto + PortfolioAllocation
 - Точка входа: кнопка "Собрать портфель" в app bar на главной
 
 ### AuthPage (диалог)
@@ -237,6 +266,28 @@ final onToggle = AppThemeScope.of(context).onToggle;
 - **Twitter Card:** summary_large_image
 - **Meta:** description, keywords, theme-color, viewport
 - **TODO:** og:image баннер 1200x630, og:url когда будет домен, sitemap, robots.txt
+
+---
+
+## Dio архитектура
+
+Единый `Dio` инстанс в `main.dart`:
+- `baseUrl`: `_baseUrl` (ngrok → прод)
+- `connectTimeout: 30s`, `receiveTimeout: 60s`
+- `ngrok-skip-browser-warning: true` — дефолтный заголовок
+- Шарится между `AuthCubit` и `AnalysisCubit` через constructor injection
+- `AuthCubit` добавляет `Authorization: Bearer` заголовок после login/register
+- `_dio.close()` в `dispose()` виджета
+
+---
+
+## Документация проекта
+
+| Файл | Описание |
+|------|----------|
+| `API.md` | Полная API-справка (эндпоинты, ошибки, авторизация) |
+| `BACKEND_SPEC.md` | Спецификация бэкенда для разработчиков |
+| `11_portfolio_blackrock.md` | Методология Portfolio Builder (BlackRock, акции+ETF) |
 
 ---
 
@@ -263,5 +314,6 @@ final onToggle = AppThemeScope.of(context).onToggle;
 - Описания режимов: фокус на ценность для клиента ("что получишь"), не на технические термины
 - UI тексты двуязычные (RU/EN)
 - Responsive breakpoint: 960px
-- Авторизация пока mock — при интеграции заменить `auth_cubit.dart`
+- Авторизация: реальный API с JWT (заменён mock)
 - Дефолтный режим анализа: `full` (если не выбран)
+- Flutter version: 3.35.3 (`.fvmrc`)
