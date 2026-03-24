@@ -15,7 +15,7 @@ dependencies:
   equatable: ^2.0.5
   fl_chart: 0.68.0
   flutter_markdown: ^0.7.4+3
-  google_fonts: ^6.2.1
+  google_fonts: 6.2.1
 
 dev_dependencies:
   flutter_test:
