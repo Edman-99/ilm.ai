@@ -24,9 +24,21 @@ class AiStockAnalyzerApp extends StatefulWidget {
 class _AiStockAnalyzerAppState extends State<AiStockAnalyzerApp> {
   final _themeNotifier = ThemeNotifier();
 
+  late final Dio _dio = Dio(
+    BaseOptions(
+      baseUrl: AiStockAnalyzerApp._baseUrl,
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 60),
+      headers: {
+        'ngrok-skip-browser-warning': 'true',
+      },
+    ),
+  );
+
   @override
   void dispose() {
     _themeNotifier.dispose();
+    _dio.close();
     super.dispose();
   }
 
@@ -34,21 +46,12 @@ class _AiStockAnalyzerAppState extends State<AiStockAnalyzerApp> {
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
-        BlocProvider(create: (_) => AuthCubit()),
+        BlocProvider(
+          create: (_) => AuthCubit(httpClient: _dio),
+        ),
         BlocProvider(
           create: (_) => AnalysisCubit(
-            repository: AnalysisRepository(
-              httpClient: Dio(
-                BaseOptions(
-                  baseUrl: AiStockAnalyzerApp._baseUrl,
-                  connectTimeout: const Duration(seconds: 30),
-                  receiveTimeout: const Duration(seconds: 60),
-                  headers: {
-                    'ngrok-skip-browser-warning': 'true',
-                  },
-                ),
-              ),
-            ),
+            repository: AnalysisRepository(httpClient: _dio),
           ),
         ),
       ],

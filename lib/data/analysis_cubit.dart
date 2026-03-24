@@ -90,6 +90,8 @@ class AnalysisCubit extends Cubit<AnalysisState> {
 
   final AnalysisRepository _repo;
 
+  AnalysisRepository get repository => _repo;
+
   void setTicker(String v) => emit(state.copyWith(ticker: v.toUpperCase()));
   void setMode(String v) => emit(state.copyWith(selectedMode: v));
   void setPlan(UserPlan v) => emit(state.copyWith(userPlan: v, dailyUsage: 0));

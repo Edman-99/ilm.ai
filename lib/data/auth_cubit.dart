@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:equatable/equatable.dart';
 import 'package:bloc/bloc.dart';
 
@@ -5,15 +6,13 @@ import 'package:ai_stock_analyzer/data/user_plan.dart';
 
 // ── Model ──
 
-class MockUser {
-  const MockUser({
+class AuthUser {
+  const AuthUser({
     required this.email,
-    required this.password,
     this.plan = UserPlan.free,
   });
 
   final String email;
-  final String password;
   final UserPlan plan;
 }
 
@@ -21,11 +20,11 @@ class MockUser {
 
 enum AuthStatus { unauthenticated, loading, authenticated, error }
 
-/// Error keys used by AuthCubit — UI translates via AppStrings.
 class AuthErrorKey {
   static const accountNotFound = 'accountNotFound';
   static const wrongPassword = 'wrongPassword';
   static const emailTaken = 'emailTaken';
+  static const networkError = 'networkError';
 }
 
 class AuthState extends Equatable {
@@ -36,7 +35,7 @@ class AuthState extends Equatable {
   });
 
   final AuthStatus status;
-  final MockUser? user;
+  final AuthUser? user;
   final String? errorKey;
 
   bool get isAuthenticated => status == AuthStatus.authenticated;
@@ -44,7 +43,7 @@ class AuthState extends Equatable {
 
   AuthState copyWith({
     AuthStatus? status,
-    MockUser? user,
+    AuthUser? user,
     String? errorKey,
   }) {
     return AuthState(
@@ -61,72 +60,105 @@ class AuthState extends Equatable {
 // ── Cubit ──
 
 class AuthCubit extends Cubit<AuthState> {
-  AuthCubit() : super(const AuthState());
+  AuthCubit({required Dio httpClient})
+      : _http = httpClient,
+        super(const AuthState());
 
-  final _users = <String, MockUser>{
-    'free@test.com': const MockUser(
-      email: 'free@test.com',
-      password: '123',
-      plan: UserPlan.free,
-    ),
-    'pro@test.com': const MockUser(
-      email: 'pro@test.com',
-      password: '123',
-      plan: UserPlan.pro,
-    ),
-    'premium@test.com': const MockUser(
-      email: 'premium@test.com',
-      password: '123',
-      plan: UserPlan.premium,
-    ),
-  };
+  final Dio _http;
+
+  String? _token;
+
+  String? get token => _token;
 
   Future<void> login(String email, String password) async {
     emit(state.copyWith(status: AuthStatus.loading));
 
-    await Future<void>.delayed(const Duration(milliseconds: 400));
+    try {
+      final resp = await _http.post<Map<String, dynamic>>(
+        '/auth/login',
+        data: {'email': email.toLowerCase(), 'password': password},
+      );
 
-    final user = _users[email.toLowerCase()];
-    if (user == null) {
-      emit(const AuthState(
-        status: AuthStatus.error,
-        errorKey: AuthErrorKey.accountNotFound,
-      ));
-      return;
+      final data = resp.data!;
+      _setToken(data['token'] as String?);
+
+      final user = AuthUser(
+        email: data['email'] as String? ?? email.toLowerCase(),
+        plan: _parsePlan(data['plan']),
+      );
+
+      emit(AuthState(status: AuthStatus.authenticated, user: user));
+    } on DioException catch (e) {
+      final errorKey = _mapError(e);
+      emit(AuthState(status: AuthStatus.error, errorKey: errorKey));
     }
-
-    if (user.password != password) {
-      emit(const AuthState(
-        status: AuthStatus.error,
-        errorKey: AuthErrorKey.wrongPassword,
-      ));
-      return;
-    }
-
-    emit(AuthState(status: AuthStatus.authenticated, user: user));
   }
 
   Future<void> register(String email, String password) async {
     emit(state.copyWith(status: AuthStatus.loading));
 
-    await Future<void>.delayed(const Duration(milliseconds: 400));
+    try {
+      final resp = await _http.post<Map<String, dynamic>>(
+        '/auth/register',
+        data: {'email': email.toLowerCase(), 'password': password},
+      );
 
-    final key = email.toLowerCase();
-    if (_users.containsKey(key)) {
-      emit(const AuthState(
-        status: AuthStatus.error,
-        errorKey: AuthErrorKey.emailTaken,
-      ));
-      return;
+      final data = resp.data!;
+      _setToken(data['token'] as String?);
+
+      final user = AuthUser(
+        email: data['email'] as String? ?? email.toLowerCase(),
+        plan: _parsePlan(data['plan']),
+      );
+
+      emit(AuthState(status: AuthStatus.authenticated, user: user));
+    } on DioException catch (e) {
+      final errorKey = _mapError(e);
+      emit(AuthState(status: AuthStatus.error, errorKey: errorKey));
     }
-
-    final user = MockUser(email: key, password: password);
-    _users[key] = user;
-
-    emit(AuthState(status: AuthStatus.authenticated, user: user));
   }
 
   void logout() {
+    _setToken(null);
     emit(const AuthState(status: AuthStatus.unauthenticated));
+  }
+
+  void _setToken(String? token) {
+    _token = token;
+    if (token != null) {
+      _http.options.headers['Authorization'] = 'Bearer $token';
+    } else {
+      _http.options.headers.remove('Authorization');
+    }
+  }
+
+  UserPlan _parsePlan(dynamic value) {
+    if (value is String) {
+      return UserPlan.values.firstWhere(
+        (p) => p.name == value,
+        orElse: () => UserPlan.free,
+      );
+    }
+    return UserPlan.free;
+  }
+
+  String _mapError(DioException e) {
+    final statusCode = e.response?.statusCode;
+    if (statusCode == null) return AuthErrorKey.networkError;
+
+    final body = e.response?.data;
+    final message = body is Map ? (body['error'] ?? body['message'] ?? '') : '';
+    final msg = message.toString().toLowerCase();
+
+    if (statusCode == 404 || msg.contains('not found')) {
+      return AuthErrorKey.accountNotFound;
+    }
+    if (statusCode == 401 || msg.contains('password')) {
+      return AuthErrorKey.wrongPassword;
+    }
+    if (statusCode == 409 || msg.contains('exists') || msg.contains('taken')) {
+      return AuthErrorKey.emailTaken;
+    }
+    return AuthErrorKey.networkError;
   }
 }
