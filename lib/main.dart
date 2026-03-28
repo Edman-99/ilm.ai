@@ -31,7 +31,7 @@ class _AiStockAnalyzerAppState extends State<AiStockAnalyzerApp> {
       final host = Uri.base.host;
       if (host.contains('vercel.app') || host.contains('ilmai')) return '/api/proxy';
     } catch (_) {}
-    return 'https://app11-us-sw.ivlk.io';   
+    return 'https://app12-us-sw.ivlk.io';   
   }
 
   final _themeNotifier = ThemeNotifier();
