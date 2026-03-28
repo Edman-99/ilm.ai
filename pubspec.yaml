@@ -16,6 +16,8 @@ dependencies:
   fl_chart: 0.68.0
   flutter_markdown: ^0.7.4+3
   google_fonts: 6.2.1
+  intl: ^0.19.0
+  shared_preferences: ^2.3.3
 
 dev_dependencies:
   flutter_test:
@@ -24,3 +26,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - lib/data/ai/prompts/

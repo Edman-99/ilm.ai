@@ -127,8 +127,8 @@ class _ModeCardState extends State<_ModeCard> {
                 ? [
                     BoxShadow(
                       color: c.isDark
-                          ? Colors.white.withValues(alpha: 0.04)
-                          : Colors.black.withValues(alpha: 0.06),
+                          ? Colors.white.withOpacity(0.04)
+                          : Colors.black.withOpacity(0.06),
                       blurRadius: 20,
                       offset: const Offset(0, 4),
                     ),

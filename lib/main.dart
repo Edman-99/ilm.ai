@@ -5,6 +5,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:ai_stock_analyzer/data/analysis_cubit.dart';
 import 'package:ai_stock_analyzer/data/analysis_repository.dart';
 import 'package:ai_stock_analyzer/data/auth_cubit.dart';
+import 'package:ai_stock_analyzer/data/ai/ai_cubit.dart';
+import 'package:ai_stock_analyzer/data/trading/trading_analytics_cubit.dart';
+import 'package:ai_stock_analyzer/data/trading/trading_repository.dart';
 import 'package:ai_stock_analyzer/presentation/pages/home_page.dart';
 import 'package:ai_stock_analyzer/theme/app_theme.dart';
 
@@ -15,13 +18,15 @@ void main() {
 class AiStockAnalyzerApp extends StatefulWidget {
   const AiStockAnalyzerApp({super.key});
 
-  static const _baseUrl = 'https://6df8-31-171-168-220.ngrok-free.app';
+  static const _baseUrl = 'https://b5ab-31-171-168-220.ngrok-free.app';
 
   @override
   State<AiStockAnalyzerApp> createState() => _AiStockAnalyzerAppState();
 }
 
 class _AiStockAnalyzerAppState extends State<AiStockAnalyzerApp> {
+  static const _tradingBaseUrl = 'https://app12-us-sw.ivlk.io';
+
   final _themeNotifier = ThemeNotifier();
 
   late final Dio _dio = Dio(
@@ -35,10 +40,19 @@ class _AiStockAnalyzerAppState extends State<AiStockAnalyzerApp> {
     ),
   );
 
+  late final Dio _tradingDio = Dio(
+    BaseOptions(
+      baseUrl: _tradingBaseUrl,
+      connectTimeout: const Duration(minutes: 2),
+      receiveTimeout: const Duration(minutes: 4),
+    ),
+  );
+
   @override
   void dispose() {
     _themeNotifier.dispose();
     _dio.close();
+    _tradingDio.close();
     super.dispose();
   }
 
@@ -54,6 +68,12 @@ class _AiStockAnalyzerAppState extends State<AiStockAnalyzerApp> {
             repository: AnalysisRepository(httpClient: _dio),
           ),
         ),
+        BlocProvider(
+          create: (_) => TradingAnalyticsCubit(
+            repository: TradingRepository(httpClient: _tradingDio),
+          ),
+        ),
+        BlocProvider(create: (_) => AiCubit()),
       ],
       child: ListenableBuilder(
         listenable: _themeNotifier,

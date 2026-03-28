@@ -86,7 +86,7 @@ class _AnalysisSkeletonState extends State<AnalysisSkeleton>
                         '${widget.ticker.toUpperCase()} · ${widget.mode}',
                         style: TextStyle(
                           fontSize: 13,
-                          color: c.textSecondary.withValues(alpha: 0.6),
+                          color: c.textSecondary.withOpacity(0.6),
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -94,7 +94,7 @@ class _AnalysisSkeletonState extends State<AnalysisSkeleton>
                         width: 180,
                         child: LinearProgressIndicator(
                           backgroundColor: c.border,
-                          color: c.accent.withValues(alpha: 0.4),
+                          color: c.accent.withOpacity(0.4),
                           minHeight: 2,
                         ),
                       ),

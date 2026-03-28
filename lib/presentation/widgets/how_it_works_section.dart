@@ -47,7 +47,7 @@ class HowItWorksSection extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(vertical: 40),
                       child: Icon(
                         Icons.arrow_forward_rounded,
-                        color: c.textSecondary.withValues(alpha: 0.3),
+                        color: c.textSecondary.withOpacity(0.3),
                         size: 20,
                       ),
                     ),
@@ -133,8 +133,8 @@ class _StepCardState extends State<_StepCard> {
               ? [
                   BoxShadow(
                     color: colors.isDark
-                        ? Colors.white.withValues(alpha: 0.04)
-                        : Colors.black.withValues(alpha: 0.06),
+                        ? Colors.white.withOpacity(0.04)
+                        : Colors.black.withOpacity(0.06),
                     blurRadius: 20,
                     offset: const Offset(0, 4),
                   ),

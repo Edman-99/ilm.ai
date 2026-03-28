@@ -4,11 +4,13 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:ai_stock_analyzer/data/analysis_cubit.dart';
 import 'package:ai_stock_analyzer/data/analytics_service.dart';
 import 'package:ai_stock_analyzer/data/auth_cubit.dart';
+import 'package:ai_stock_analyzer/data/trading/trading_analytics_cubit.dart';
 import 'package:ai_stock_analyzer/data/user_plan.dart';
 import 'package:ai_stock_analyzer/l10n/app_strings.dart';
 import 'package:ai_stock_analyzer/presentation/pages/auth_page.dart';
 import 'package:ai_stock_analyzer/presentation/pages/portfolio_page.dart';
 import 'package:ai_stock_analyzer/presentation/pages/pricing_page.dart';
+import 'package:ai_stock_analyzer/presentation/pages/trading_analytics_page.dart';
 import 'package:ai_stock_analyzer/presentation/pages/result_page.dart';
 import 'package:ai_stock_analyzer/presentation/widgets/analysis_skeleton.dart';
 import 'package:ai_stock_analyzer/presentation/widgets/hero_section.dart';
@@ -211,6 +213,8 @@ class _HomePageState extends State<HomePage> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  _buildTradingAnalyticsButton(c),
+                  const SizedBox(width: 8),
                   _buildPortfolioButton(c, s),
                   const SizedBox(width: 8),
                   _buildAuthButton(c),
@@ -347,7 +351,7 @@ class _HomePageState extends State<HomePage> {
                       hintStyle: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.w700,
-                        color: c.textSecondary.withValues(alpha: 0.3),
+                        color: c.textSecondary.withOpacity(0.3),
                         letterSpacing: 2,
                       ),
                       border: OutlineInputBorder(
@@ -544,7 +548,7 @@ class _HomePageState extends State<HomePage> {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
             border: Border.all(
-              color: state.hasCredits ? c.border : c.red.withValues(alpha: 0.4),
+              color: state.hasCredits ? c.border : c.red.withOpacity(0.4),
             ),
             borderRadius: BorderRadius.circular(10),
           ),
@@ -597,6 +601,47 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Widget _buildTradingAnalyticsButton(AppColors c) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => BlocProvider.value(
+              value: context.read<TradingAnalyticsCubit>(),
+              child: const TradingAnalyticsPage(),
+            ),
+          ),
+        );
+      },
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            border: Border.all(color: c.green.withOpacity(0.3)),
+            borderRadius: BorderRadius.circular(10),
+            color: c.green.withOpacity(0.06),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.analytics_outlined, size: 16, color: c.green),
+              const SizedBox(width: 6),
+              Text(
+                'Trading Analytics',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: c.green,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildPortfolioButton(AppColors c, AppStrings s) {
     return GestureDetector(
       onTap: () {
@@ -612,9 +657,9 @@ class _HomePageState extends State<HomePage> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
-            border: Border.all(color: c.accent.withValues(alpha: 0.3)),
+            border: Border.all(color: c.accent.withOpacity(0.3)),
             borderRadius: BorderRadius.circular(10),
-            color: c.accent.withValues(alpha: 0.06),
+            color: c.accent.withOpacity(0.06),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -703,9 +748,9 @@ class _HomePageState extends State<HomePage> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: c.red.withValues(alpha: 0.08),
+        color: c.red.withOpacity(0.08),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: c.red.withValues(alpha: 0.2)),
+        border: Border.all(color: c.red.withOpacity(0.2)),
       ),
       child: Row(
         children: [
@@ -770,7 +815,7 @@ class _HomePageState extends State<HomePage> {
                       width: 42,
                       height: 42,
                       decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.12),
+                        color: color.withOpacity(0.12),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Center(

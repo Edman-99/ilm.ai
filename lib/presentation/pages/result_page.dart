@@ -61,7 +61,7 @@ class ResultPage extends StatelessWidget {
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 12,
-                            color: c.textSecondary.withValues(alpha: 0.6),
+                            color: c.textSecondary.withOpacity(0.6),
                             height: 1.5,
                           ),
                         ),
@@ -166,9 +166,9 @@ ${analysis.modeDescription}
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
             decoration: BoxDecoration(
-              color: scoreColor.withValues(alpha: 0.12),
+              color: scoreColor.withOpacity(0.12),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: scoreColor.withValues(alpha: 0.2)),
+              border: Border.all(color: scoreColor.withOpacity(0.2)),
             ),
             child: Text(
               '${analysis.score} $signalText',
@@ -631,8 +631,8 @@ class _SwotQ extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: c.isDark
-            ? Colors.white.withValues(alpha: 0.03)
-            : Colors.black.withValues(alpha: 0.02),
+            ? Colors.white.withOpacity(0.03)
+            : Colors.black.withOpacity(0.02),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: c.border),
       ),

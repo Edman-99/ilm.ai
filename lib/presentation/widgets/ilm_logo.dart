@@ -106,7 +106,7 @@ class _IlmLogoPainter extends CustomPainter {
 
     canvas.drawPath(
       mainSailPath,
-      Paint()..color = primary.withValues(alpha: 0.92),
+      Paint()..color = primary.withOpacity(0.92),
     );
 
     // ── Small sail (right) ──
@@ -121,7 +121,7 @@ class _IlmLogoPainter extends CustomPainter {
 
     canvas.drawPath(
       smallSailPath,
-      Paint()..color = primary.withValues(alpha: 0.45),
+      Paint()..color = primary.withOpacity(0.45),
     );
 
     // ── Cross beam ──
@@ -129,7 +129,7 @@ class _IlmLogoPainter extends CustomPainter {
       const Offset(106, 102),
       const Offset(220, 102),
       Paint()
-        ..color = primary.withValues(alpha: 0.5)
+        ..color = primary.withOpacity(0.5)
         ..strokeWidth = 1.5
         ..strokeCap = StrokeCap.round,
     );
@@ -143,7 +143,7 @@ class _IlmLogoPainter extends CustomPainter {
 
     canvas.drawPath(
       hullPath,
-      Paint()..color = primary.withValues(alpha: 0.92),
+      Paint()..color = primary.withOpacity(0.92),
     );
 
     // Reset sway for wave
@@ -164,7 +164,7 @@ class _IlmLogoPainter extends CustomPainter {
     canvas.drawPath(
       wavePath,
       Paint()
-        ..color = primary.withValues(alpha: 0.25)
+        ..color = primary.withOpacity(0.25)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.5
         ..strokeCap = StrokeCap.round,
@@ -180,7 +180,7 @@ class _IlmLogoPainter extends CustomPainter {
     canvas.drawCircle(
       Offset(170, 46 + floatY),
       5,
-      Paint()..color = primary.withValues(alpha: dotOpacity),
+      Paint()..color = primary.withOpacity(dotOpacity),
     );
 
     canvas.restore();

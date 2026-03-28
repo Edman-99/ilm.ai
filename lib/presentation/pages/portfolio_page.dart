@@ -200,7 +200,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
                     hintStyle: TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.w700,
-                      color: c.textSecondary.withValues(alpha: 0.3),
+                      color: c.textSecondary.withOpacity(0.3),
                     ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -276,9 +276,9 @@ class _PortfolioPageState extends State<PortfolioPage> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: c.red.withValues(alpha: 0.08),
+                      color: c.red.withOpacity(0.08),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: c.red.withValues(alpha: 0.2)),
+                      border: Border.all(color: c.red.withOpacity(0.2)),
                     ),
                     child: Text(
                       s.errorGeneric,
@@ -321,7 +321,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
             height: 48,
             child: CircularProgressIndicator(
               strokeWidth: 2.5,
-              color: c.accent.withValues(alpha: 0.5),
+              color: c.accent.withOpacity(0.5),
             ),
           ),
           const SizedBox(height: 24),
@@ -343,7 +343,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
             width: 200,
             child: LinearProgressIndicator(
               backgroundColor: c.border,
-              color: c.accent.withValues(alpha: 0.4),
+              color: c.accent.withOpacity(0.4),
               minHeight: 2,
             ),
           ),
@@ -435,7 +435,7 @@ class _PortfolioResult extends StatelessWidget {
                 // Disclaimer
                 Text(
                   s.disclaimer,
-                  style: TextStyle(fontSize: 12, color: c.textSecondary.withValues(alpha: 0.5)),
+                  style: TextStyle(fontSize: 12, color: c.textSecondary.withOpacity(0.5)),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -813,7 +813,7 @@ class _AllocationRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(
-        border: isLast ? null : Border(bottom: BorderSide(color: c.border.withValues(alpha: 0.5))),
+        border: isLast ? null : Border(bottom: BorderSide(color: c.border.withOpacity(0.5))),
       ),
       child: Row(
         children: [
@@ -965,13 +965,13 @@ class _AnalysisCard extends StatelessWidget {
               strong: TextStyle(fontWeight: FontWeight.w700, color: c.textPrimary),
               em: TextStyle(fontStyle: FontStyle.italic, color: c.textSecondary),
               blockquoteDecoration: BoxDecoration(
-                color: c.accent.withValues(alpha: 0.05),
+                color: c.accent.withOpacity(0.05),
                 border: Border(left: BorderSide(color: c.accent, width: 3)),
               ),
               code: TextStyle(
                 fontSize: 13,
                 color: c.accent,
-                backgroundColor: c.accent.withValues(alpha: 0.08),
+                backgroundColor: c.accent.withOpacity(0.08),
               ),
             ),
           ),
@@ -1043,7 +1043,7 @@ class _StrategyCardState extends State<_StrategyCard> {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: c.accent.withValues(alpha: 0.08),
+                  color: c.accent.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(widget.icon, color: c.textSecondary, size: 22),

@@ -9,7 +9,7 @@ import 'package:ai_stock_analyzer/theme/app_theme.dart';
 Future<bool> showAuthDialog(BuildContext context) async {
   final result = await showDialog<bool>(
     context: context,
-    barrierColor: Colors.black.withValues(alpha: 0.6),
+    barrierColor: Colors.black.withOpacity(0.6),
     builder: (_) => BlocProvider.value(
       value: context.read<AuthCubit>(),
       child: const _AuthDialog(),
@@ -170,10 +170,10 @@ class _AuthDialogState extends State<_AuthDialog> {
                             width: double.infinity,
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: c.red.withValues(alpha: 0.08),
+                              color: c.red.withOpacity(0.08),
                               borderRadius: BorderRadius.circular(10),
                               border: Border.all(
-                                  color: c.red.withValues(alpha: 0.2)),
+                                  color: c.red.withOpacity(0.2)),
                             ),
                             child: Row(
                               children: [
@@ -267,7 +267,7 @@ class _AuthDialogState extends State<_AuthDialog> {
       hintText: hintText,
       hintStyle: TextStyle(
         fontSize: 15,
-        color: c.textSecondary.withValues(alpha: 0.5),
+        color: c.textSecondary.withOpacity(0.5),
       ),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),

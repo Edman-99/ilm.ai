@@ -197,8 +197,8 @@ class _PlanCardState extends State<_PlanCard> {
               ? [
                   BoxShadow(
                     color: c.isDark
-                        ? Colors.white.withValues(alpha: 0.04)
-                        : Colors.black.withValues(alpha: 0.06),
+                        ? Colors.white.withOpacity(0.04)
+                        : Colors.black.withOpacity(0.06),
                     blurRadius: 20,
                     offset: const Offset(0, 4),
                   ),
@@ -294,7 +294,7 @@ class _PlanCardState extends State<_PlanCard> {
                             ? Icons.check_rounded
                             : Icons.close_rounded,
                         size: 16,
-                        color: f.included ? c.textPrimary : c.textSecondary.withValues(alpha: 0.4),
+                        color: f.included ? c.textPrimary : c.textSecondary.withOpacity(0.4),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -304,7 +304,7 @@ class _PlanCardState extends State<_PlanCard> {
                             fontSize: 14,
                             color: f.included
                                 ? c.textPrimary
-                                : c.textSecondary.withValues(alpha: 0.4),
+                                : c.textSecondary.withOpacity(0.4),
                           ),
                         ),
                       ),
