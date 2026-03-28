@@ -25,7 +25,14 @@ class AiStockAnalyzerApp extends StatefulWidget {
 }
 
 class _AiStockAnalyzerAppState extends State<AiStockAnalyzerApp> {
-  static const _tradingBaseUrl = 'https://app12-us-sw.ivlk.io';
+  // On Vercel (*.vercel.app) use proxy, locally use direct URL.
+  static String get _tradingBaseUrl {
+    try {
+      final host = Uri.base.host;
+      if (host.contains('vercel.app') || host.contains('ilmai')) return '/api/proxy';
+    } catch (_) {}
+    return 'https://app11-us-sw.ivlk.io';
+  }
 
   final _themeNotifier = ThemeNotifier();
 
