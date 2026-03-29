@@ -4,7 +4,6 @@ import 'package:equatable/equatable.dart';
 
 import 'package:ai_stock_analyzer/data/analysis_repository.dart';
 import 'package:ai_stock_analyzer/data/stock_analysis_dto.dart';
-import 'package:ai_stock_analyzer/data/user_plan.dart';
 
 // ── State ──
 
@@ -12,8 +11,6 @@ enum AnalysisStatus { idle, loading, loaded, error }
 
 /// Error keys — UI translates via AppStrings.
 class AnalysisErrorKey {
-  static const modeUnavailable = 'modeUnavailable';
-  static const limitReached = 'limitReached';
   static const server = 'server'; // suffix: ":code"
   static const noConnection = 'noConnection';
   static const generic = 'generic';
@@ -27,8 +24,6 @@ class AnalysisState extends Equatable {
     this.result,
     this.errorKey,
     this.history = const [],
-    this.userPlan = UserPlan.free,
-    this.dailyUsage = 0,
   });
 
   final AnalysisStatus status;
@@ -37,22 +32,10 @@ class AnalysisState extends Equatable {
   final StockAnalysisDto? result;
   final String? errorKey;
   final List<StockAnalysisDto> history;
-  final UserPlan userPlan;
-  final int dailyUsage;
 
   bool get isLoading => status == AnalysisStatus.loading;
   bool get isLoaded => status == AnalysisStatus.loaded;
   bool get isError => status == AnalysisStatus.error;
-
-  int get dailyLimit => plans[userPlan]!.dailyLimit;
-  bool get isUnlimited => dailyLimit < 0;
-  int get remaining => isUnlimited ? -1 : (dailyLimit - dailyUsage).clamp(0, dailyLimit);
-  bool get hasCredits => isUnlimited || remaining > 0;
-
-  bool isModeAvailable(String mode) {
-    if (userPlan == UserPlan.free) return freeModes.contains(mode);
-    return true;
-  }
 
   AnalysisState copyWith({
     AnalysisStatus? status,
@@ -61,8 +44,6 @@ class AnalysisState extends Equatable {
     StockAnalysisDto? result,
     String? errorKey,
     List<StockAnalysisDto>? history,
-    UserPlan? userPlan,
-    int? dailyUsage,
   }) {
     return AnalysisState(
       status: status ?? this.status,
@@ -71,14 +52,12 @@ class AnalysisState extends Equatable {
       result: result ?? this.result,
       errorKey: errorKey ?? this.errorKey,
       history: history ?? this.history,
-      userPlan: userPlan ?? this.userPlan,
-      dailyUsage: dailyUsage ?? this.dailyUsage,
     );
   }
 
   @override
   List<Object?> get props =>
-      [status, selectedMode, ticker, result, errorKey, history, userPlan, dailyUsage];
+      [status, selectedMode, ticker, result, errorKey, history];
 }
 
 // ── Cubit ──
@@ -94,34 +73,16 @@ class AnalysisCubit extends Cubit<AnalysisState> {
 
   void setTicker(String v) => emit(state.copyWith(ticker: v.toUpperCase()));
   void setMode(String v) => emit(state.copyWith(selectedMode: v));
-  void setPlan(UserPlan v) => emit(state.copyWith(userPlan: v, dailyUsage: 0));
 
-  /// Reset state (on logout).
+  /// Reset state.
   void reset() => emit(const AnalysisState());
 
   Future<void> analyze() async {
     final ticker = state.ticker.trim();
     if (ticker.isEmpty) return;
 
-    // Default to 'full' if no mode selected
     if (state.selectedMode.isEmpty) {
       emit(state.copyWith(selectedMode: 'full'));
-    }
-
-    if (!state.isModeAvailable(state.selectedMode)) {
-      emit(state.copyWith(
-        status: AnalysisStatus.error,
-        errorKey: AnalysisErrorKey.modeUnavailable,
-      ));
-      return;
-    }
-
-    if (!state.hasCredits) {
-      emit(state.copyWith(
-        status: AnalysisStatus.error,
-        errorKey: AnalysisErrorKey.limitReached,
-      ));
-      return;
     }
 
     emit(state.copyWith(status: AnalysisStatus.loading, errorKey: null));
@@ -133,7 +94,6 @@ class AnalysisCubit extends Cubit<AnalysisState> {
           status: AnalysisStatus.loaded,
           result: result,
           history: [result, ...state.history],
-          dailyUsage: state.dailyUsage + 1,
         ),
       );
     } on DioException catch (e) {

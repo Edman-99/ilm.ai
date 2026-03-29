@@ -1,9 +1,11 @@
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
 
+import 'demo_data.dart';
 import 'local_storage_service.dart';
 import 'trading_analytics_calculator.dart';
 import 'trading_analytics_entity.dart';
+import 'strategy_entity.dart';
 import 'trading_order_dto.dart';
 import 'trading_position_dto.dart';
 import 'trading_repository.dart';
@@ -11,7 +13,7 @@ import 'trading_repository.dart';
 // ── State ──
 
 enum TradingAnalyticsStatus { unauthenticated, loading, loaded, error }
-enum TradingPage { dashboard, portfolio, orders, ai }
+enum TradingPage { dashboard, portfolio, strategies, orders, ai }
 
 class TradingAnalyticsState extends Equatable {
   const TradingAnalyticsState({
@@ -22,6 +24,7 @@ class TradingAnalyticsState extends Equatable {
     this.positions = const [],
     this.recentOrders = const [],
     this.sparklines = const {},
+    this.strategies = const [],
     this.positionsLoading = false,
     this.ordersLoading = false,
     this.errorMessage,
@@ -29,6 +32,7 @@ class TradingAnalyticsState extends Equatable {
     this.filterTo,
     this.savedEmail,
     this.savedPassword,
+    this.isDemo = false,
   });
 
   final TradingAnalyticsStatus status;
@@ -38,6 +42,7 @@ class TradingAnalyticsState extends Equatable {
   final List<TradingPositionDto> positions;
   final List<TradingOrderDto> recentOrders;
   final Map<String, List<double>> sparklines;
+  final List<StrategyEntity> strategies;
   final bool positionsLoading;
   final bool ordersLoading;
   final String? errorMessage;
@@ -45,6 +50,7 @@ class TradingAnalyticsState extends Equatable {
   final DateTime? filterTo;
   final String? savedEmail;
   final String? savedPassword;
+  final bool isDemo;
 
   bool get isLoading => status == TradingAnalyticsStatus.loading;
   bool get isLoaded => status == TradingAnalyticsStatus.loaded;
@@ -59,6 +65,7 @@ class TradingAnalyticsState extends Equatable {
     List<TradingPositionDto>? positions,
     List<TradingOrderDto>? recentOrders,
     Map<String, List<double>>? sparklines,
+    List<StrategyEntity>? strategies,
     bool? positionsLoading,
     bool? ordersLoading,
     String? errorMessage,
@@ -66,6 +73,7 @@ class TradingAnalyticsState extends Equatable {
     DateTime? filterTo,
     String? savedEmail,
     String? savedPassword,
+    bool? isDemo,
     bool clearFilter = false,
     bool clearCredentials = false,
   }) {
@@ -77,6 +85,7 @@ class TradingAnalyticsState extends Equatable {
       positions: positions ?? this.positions,
       recentOrders: recentOrders ?? this.recentOrders,
       sparklines: sparklines ?? this.sparklines,
+      strategies: strategies ?? this.strategies,
       positionsLoading: positionsLoading ?? this.positionsLoading,
       ordersLoading: ordersLoading ?? this.ordersLoading,
       errorMessage: errorMessage,
@@ -84,16 +93,17 @@ class TradingAnalyticsState extends Equatable {
       filterTo: clearFilter ? null : (filterTo ?? this.filterTo),
       savedEmail: clearCredentials ? null : (savedEmail ?? this.savedEmail),
       savedPassword: clearCredentials ? null : (savedPassword ?? this.savedPassword),
+      isDemo: isDemo ?? this.isDemo,
     );
   }
 
   @override
   List<Object?> get props => [
         status, activePage, analytics?.totalTrades, allOrders.length,
-        positions.length, recentOrders.length, sparklines.length,
+        positions.length, recentOrders.length, sparklines.length, strategies.length,
         positionsLoading, ordersLoading,
         errorMessage, filterFrom, filterTo,
-        savedEmail, savedPassword,
+        savedEmail, savedPassword, isDemo,
       ];
 }
 
@@ -111,6 +121,8 @@ class TradingAnalyticsCubit extends Cubit<TradingAnalyticsState> {
     emit(state.copyWith(activePage: page));
     // Lazy-load data for the page.
     if (page == TradingPage.portfolio && state.positions.isEmpty) {
+      loadPositions();
+    } else if (page == TradingPage.strategies && state.positions.isEmpty) {
       loadPositions();
     } else if (page == TradingPage.orders && state.recentOrders.isEmpty) {
       loadOrders();
@@ -131,6 +143,23 @@ class TradingAnalyticsCubit extends Cubit<TradingAnalyticsState> {
     if (creds != null) {
       await loginAndLoad(creds.email, creds.password);
     }
+  }
+
+  /// Load demo data (no API calls).
+  void loadDemo() {
+    final orders = demoOrders;
+    final analytics = TradingAnalyticsCalculator.calculate(orders);
+    emit(state.copyWith(
+      status: TradingAnalyticsStatus.loaded,
+      analytics: analytics,
+      allOrders: orders,
+      positions: demoPositions,
+      recentOrders: orders,
+      strategies: demoStrategies,
+      isDemo: true,
+      savedEmail: 'demo@investlink.io',
+      clearFilter: true,
+    ));
   }
 
   /// Login → save credentials → load orders → calculate.

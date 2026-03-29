@@ -1,6 +1,5 @@
 import 'package:dio/dio.dart';
 
-import 'package:ai_stock_analyzer/data/portfolio_result_dto.dart';
 import 'package:ai_stock_analyzer/data/stock_analysis_dto.dart';
 
 class AnalysisRepository {
@@ -21,19 +20,5 @@ class AnalysisRepository {
       },
     );
     return StockAnalysisDto.fromJson(resp.data!);
-  }
-
-  Future<PortfolioResultDto> buildPortfolio({
-    required double amount,
-    required String riskStrategy,
-  }) async {
-    final resp = await _http.post<Map<String, dynamic>>(
-      '/analyze/portfolio-builder',
-      data: {
-        'amount': amount,
-        'risk_strategy': riskStrategy,
-      },
-    );
-    return PortfolioResultDto.fromJson(resp.data!);
   }
 }

@@ -341,13 +341,11 @@ class _PlanCardState extends State<_PlanCard> {
         curve: Curves.easeOut,
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: _hovered
-              ? (c.isDark ? const Color(0xFF111111) : const Color(0xFFF5F5F5))
-              : c.bg,
+          color: _hovered ? c.cardHover : c.bg,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: _hovered
-                ? (c.isDark ? const Color(0xFF555555) : const Color(0xFFCCCCCC))
+                ? c.border
                 : c.border,
           ),
         ),
@@ -493,79 +491,56 @@ class _Section {
   final String body;
 }
 
-class _SectionCard extends StatefulWidget {
+class _SectionCard extends StatelessWidget {
   const _SectionCard({required this.section, required this.c});
   final _Section section;
   final AppColors c;
 
   @override
-  State<_SectionCard> createState() => _SectionCardState();
-}
-
-class _SectionCardState extends State<_SectionCard> {
-  bool _hovered = false;
-
-  @override
   Widget build(BuildContext context) {
-    final c = widget.c;
-    final section = widget.section;
+    final section = this.section;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: MouseRegion(
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          width: double.infinity,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: _hovered
-                ? (c.isDark
-                    ? const Color(0xFF111111)
-                    : const Color(0xFFF5F5F5))
-                : c.bg,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: _hovered
-                  ? (c.isDark
-                      ? const Color(0xFF555555)
-                      : const Color(0xFFCCCCCC))
-                  : c.border,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: c.card,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: c.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              section.title,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: c.textPrimary,
+              ),
             ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                section.title,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
+            const SizedBox(height: 12),
+            MarkdownBody(
+              data: section.body,
+              shrinkWrap: true,
+              styleSheet: MarkdownStyleSheet(
+                p: TextStyle(
+                  fontSize: 14,
+                  color: c.textPrimary,
+                  height: 1.7,
+                ),
+                strong: TextStyle(
+                  fontWeight: FontWeight.w700,
                   color: c.textPrimary,
                 ),
+                listBullet: TextStyle(color: c.textSecondary),
+                listBulletPadding: const EdgeInsets.only(right: 8),
+                blockSpacing: 10,
               ),
-              const SizedBox(height: 12),
-              MarkdownBody(
-                data: section.body,
-                shrinkWrap: true,
-                styleSheet: MarkdownStyleSheet(
-                  p: TextStyle(
-                    fontSize: 14,
-                    color: c.textPrimary,
-                    height: 1.7,
-                  ),
-                  strong: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: c.textPrimary,
-                  ),
-                  listBullet: TextStyle(color: c.textSecondary),
-                  listBulletPadding: const EdgeInsets.only(right: 8),
-                  blockSpacing: 10,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

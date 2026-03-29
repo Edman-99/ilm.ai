@@ -4,73 +4,117 @@ import 'package:flutter/material.dart';
 
 import 'package:ai_stock_analyzer/theme/app_theme.dart';
 
-class ScoreGauge extends StatelessWidget {
+class ScoreGauge extends StatefulWidget {
   const ScoreGauge({required this.score, required this.signal, super.key});
 
   final int score;
   final String signal;
 
   @override
+  State<ScoreGauge> createState() => _ScoreGaugeState();
+}
+
+class _ScoreGaugeState extends State<ScoreGauge>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    );
+    _animation = CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
+    _controller.forward();
+  }
+
+  @override
+  void didUpdateWidget(ScoreGauge old) {
+    super.didUpdateWidget(old);
+    if (old.score != widget.score) {
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final t = AppThemeScope.of(context);
     final c = t.colors;
     final s = t.strings;
-    final color = c.scoreColor(score);
+    final color = c.scoreColor(widget.score);
 
-    return Column(
-      children: [
-        SizedBox(
-          width: 200,
-          height: 120,
-          child: CustomPaint(
-            painter: _Painter(score: score, color: color, trackColor: c.border),
-            child: Align(
-              alignment: Alignment.bottomCenter,
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, _) {
+        final animatedScore = (_animation.value * widget.score).round();
+        return Column(
+          children: [
+            SizedBox(
+              width: 200,
+              height: 120,
+              child: CustomPaint(
+                painter: _Painter(
+                  progress: _animation.value * widget.score / 100,
+                  color: color,
+                  trackColor: c.border,
+                ),
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Text(
+                    '$animatedScore',
+                    style: TextStyle(
+                      fontSize: 40,
+                      fontWeight: FontWeight.w700,
+                      color: color,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
               child: Text(
-                '$score',
+                widget.signal,
                 style: TextStyle(
-                  fontSize: 40,
+                  fontSize: 16,
                   fontWeight: FontWeight.w700,
                   color: color,
                 ),
               ),
             ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(
-            signal,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: color,
+            const SizedBox(height: 4),
+            Text(
+              s.outOf100,
+              style: TextStyle(fontSize: 12, color: c.textSecondary),
             ),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          s.outOf100,
-          style: TextStyle(fontSize: 12, color: c.textSecondary),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 }
 
 class _Painter extends CustomPainter {
   _Painter({
-    required this.score,
+    required this.progress,
     required this.color,
     required this.trackColor,
   });
 
-  final int score;
+  final double progress; // 0.0 to 1.0
   final Color color;
   final Color trackColor;
 
@@ -91,19 +135,21 @@ class _Painter extends CustomPainter {
         ..strokeCap = StrokeCap.round,
     );
 
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: r),
-      pi,
-      (score / 100) * pi,
-      false,
-      Paint()
-        ..color = color
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 16
-        ..strokeCap = StrokeCap.round,
-    );
+    if (progress > 0) {
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: r),
+        pi,
+        progress * pi,
+        false,
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 16
+          ..strokeCap = StrokeCap.round,
+      );
+    }
   }
 
   @override
-  bool shouldRepaint(_Painter old) => old.score != score;
+  bool shouldRepaint(_Painter old) => old.progress != progress;
 }

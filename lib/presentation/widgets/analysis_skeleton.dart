@@ -48,7 +48,7 @@ class _AnalysisSkeletonState extends State<AnalysisSkeleton>
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1100),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 80, 24, 48),
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 48),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -189,17 +189,11 @@ class _ShimmerBox extends StatelessWidget {
     return AnimatedBuilder(
       animation: animation,
       builder: (context, child) {
-        final shimmerColor = c.isDark
-            ? Color.lerp(
-                const Color(0xFF1A1A1A),
-                const Color(0xFF2A2A2A),
-                (animation.value * 2 - 1).abs(),
-              )!
-            : Color.lerp(
-                const Color(0xFFEEEEEE),
-                const Color(0xFFDDDDDD),
-                (animation.value * 2 - 1).abs(),
-              )!;
+        final shimmerColor = Color.lerp(
+          c.card,
+          c.border,
+          (animation.value * 2 - 1).abs() * 0.5,
+        )!;
 
         return Container(
           width: w,

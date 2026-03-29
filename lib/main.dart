@@ -4,7 +4,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:ai_stock_analyzer/data/analysis_cubit.dart';
 import 'package:ai_stock_analyzer/data/analysis_repository.dart';
-import 'package:ai_stock_analyzer/data/auth_cubit.dart';
 import 'package:ai_stock_analyzer/data/ai/ai_cubit.dart';
 import 'package:ai_stock_analyzer/data/trading/trading_analytics_cubit.dart';
 import 'package:ai_stock_analyzer/data/trading/trading_repository.dart';
@@ -31,7 +30,7 @@ class _AiStockAnalyzerAppState extends State<AiStockAnalyzerApp> {
       final host = Uri.base.host;
       if (host.contains('vercel.app') || host.contains('ilmai')) return '/api/proxy';
     } catch (_) {}
-    return 'https://app12-us-sw.ivlk.io';   
+    return 'https://app12-us-sw.ivlk.io';
   }
 
   final _themeNotifier = ThemeNotifier();
@@ -67,9 +66,6 @@ class _AiStockAnalyzerAppState extends State<AiStockAnalyzerApp> {
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
-        BlocProvider(
-          create: (_) => AuthCubit(httpClient: _dio),
-        ),
         BlocProvider(
           create: (_) => AnalysisCubit(
             repository: AnalysisRepository(httpClient: _dio),

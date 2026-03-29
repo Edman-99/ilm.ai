@@ -8,18 +8,24 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
 import 'package:ai_stock_analyzer/data/ai/ai_cubit.dart';
+import 'package:ai_stock_analyzer/data/analytics_service.dart';
+import 'package:ai_stock_analyzer/data/lead_service.dart';
+import 'package:ai_stock_analyzer/l10n/app_strings.dart';
+import 'package:ai_stock_analyzer/data/trading/strategy_entity.dart';
 import 'package:ai_stock_analyzer/data/trading/trading_analytics_cubit.dart';
 import 'package:ai_stock_analyzer/data/trading/trading_analytics_entity.dart';
 import 'package:ai_stock_analyzer/data/trading/trading_position_dto.dart';
 import 'package:ai_stock_analyzer/data/trading/trading_order_dto.dart';
 import 'package:ai_stock_analyzer/theme/app_theme.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 // =============================================================================
 // PAGE
 // =============================================================================
 
 class TradingAnalyticsPage extends StatefulWidget {
-  const TradingAnalyticsPage({super.key});
+  const TradingAnalyticsPage({this.embedded = false, super.key});
+  final bool embedded;
   @override
   State<TradingAnalyticsPage> createState() => _TradingAnalyticsPageState();
 }
@@ -49,9 +55,7 @@ class _TradingAnalyticsPageState extends State<TradingAnalyticsPage> {
   @override
   Widget build(BuildContext context) {
     final c = AppThemeScope.of(context).colors;
-    return Scaffold(
-      backgroundColor: c.bg,
-      body: BlocBuilder<TradingAnalyticsCubit, TradingAnalyticsState>(
+    Widget content = BlocBuilder<TradingAnalyticsCubit, TradingAnalyticsState>(
         builder: (context, state) {
           if (!state.isAuthenticated && !state.isLoading) return _LoginForm(emailCtrl: _emailCtrl, passwordCtrl: _passwordCtrl);
           if (state.isLoading) return _Skeleton(c: c);
@@ -62,6 +66,8 @@ class _TradingAnalyticsPageState extends State<TradingAnalyticsPage> {
           switch (state.activePage) {
             case TradingPage.portfolio:
               body = _PortfolioPage(c: c, state: state);
+            case TradingPage.strategies:
+              body = _StrategiesPage(c: c, state: state);
             case TradingPage.orders:
               body = _OrdersPage(c: c, state: state);
             case TradingPage.ai:
@@ -72,14 +78,16 @@ class _TradingAnalyticsPageState extends State<TradingAnalyticsPage> {
           return Row(children: [
             if (wide) _Sidebar(c: c, email: state.savedEmail, activePage: state.activePage),
             Expanded(child: Column(children: [
-              _Header(c: c, period: _selectedPeriod, activePage: state.activePage, onPeriod: (p, f, t) { setState(() => _selectedPeriod = p); context.read<TradingAnalyticsCubit>().filterByDateRange(f, t); }),
+              _Header(c: c, period: _selectedPeriod, activePage: state.activePage, isDemo: state.isDemo, onPeriod: (p, f, t) { setState(() => _selectedPeriod = p); context.read<TradingAnalyticsCubit>().filterByDateRange(f, t); }),
               Expanded(child: body),
+              if (state.isDemo) CtaBanner(c: c),
               _StatusBar(c: c, trades: state.analytics!.totalTrades),
             ])),
           ]);
         },
-      ),
     );
+    if (widget.embedded) return content;
+    return Scaffold(backgroundColor: c.bg, body: content);
   }
 }
 
@@ -97,10 +105,9 @@ class _Sidebar extends StatelessWidget {
       width: 200, color: c.isDark ? const Color(0xFF0A0A0A) : c.surface,
       child: Column(children: [
         const SizedBox(height: 24),
-        Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: Row(children: [
-          Icon(Icons.show_chart, color: c.green, size: 20), const SizedBox(width: 8),
-          Text('INVESTLINK', style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 1)),
-        ])),
+        Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child:
+          SvgPicture.asset('assets/svg/ic_app_logo.svg', height: 22),
+        ),
         const SizedBox(height: 20),
         if (email != null) Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: Align(alignment: Alignment.centerLeft, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(email!.split('@').first.toUpperCase(), style: TextStyle(color: c.green, fontSize: 11, fontWeight: FontWeight.w700)),
@@ -109,6 +116,7 @@ class _Sidebar extends StatelessWidget {
         const SizedBox(height: 24),
         _navBtn(Icons.dashboard_rounded, 'DASHBOARD', TradingPage.dashboard, cubit),
         _navBtn(Icons.account_balance_wallet_outlined, 'PORTFOLIO', TradingPage.portfolio, cubit),
+        _navBtn(Icons.pie_chart_rounded, 'STRATEGIES', TradingPage.strategies, cubit),
         _navBtn(Icons.receipt_long_rounded, 'ORDERS', TradingPage.orders, cubit),
         _navBtn(Icons.auto_awesome_rounded, 'AI INSIGHTS', TradingPage.ai, cubit),
         const Spacer(),
@@ -143,8 +151,8 @@ class _Sidebar extends StatelessWidget {
 // =============================================================================
 
 class _Header extends StatelessWidget {
-  const _Header({required this.c, required this.period, required this.activePage, required this.onPeriod});
-  final AppColors c; final String period; final TradingPage activePage; final void Function(String, DateTime?, DateTime?) onPeriod;
+  const _Header({required this.c, required this.period, required this.activePage, this.isDemo = false, required this.onPeriod});
+  final AppColors c; final String period; final TradingPage activePage; final bool isDemo; final void Function(String, DateTime?, DateTime?) onPeriod;
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
@@ -156,15 +164,21 @@ class _Header extends StatelessWidget {
             onTap: () { final now = DateTime.now(); DateTime? f; switch(p) { case '1W': f=now.subtract(const Duration(days:7)); case '1M': f=DateTime(now.year,now.month-1,now.day); case '3M': f=DateTime(now.year,now.month-3,now.day); case '6M': f=DateTime(now.year,now.month-6,now.day); case '1Y': f=DateTime(now.year-1,now.month,now.day); default: onPeriod(p,null,null); return; } onPeriod(p,f,now); },
             child: MouseRegion(cursor: SystemMouseCursors.click, child: Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
               decoration: BoxDecoration(color: on ? c.green : Colors.transparent, borderRadius: BorderRadius.circular(20)),
-              child: Text(p, style: TextStyle(color: on ? Colors.black : c.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)))),
+              child: Text(p, style: TextStyle(color: on ? c.bg : c.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)))),
           ));
         })
       else
         Text(
-          switch (activePage) { TradingPage.portfolio => 'PORTFOLIO', TradingPage.orders => 'ORDER HISTORY', TradingPage.ai => 'AI INSIGHTS', _ => '' },
+          switch (activePage) { TradingPage.portfolio => 'PORTFOLIO', TradingPage.strategies => 'STRATEGIES', TradingPage.orders => 'ORDER HISTORY', TradingPage.ai => 'AI INSIGHTS', _ => '' },
           style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.w700, letterSpacing: 1),
         ),
       const Spacer(),
+      if (isDemo) Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        margin: const EdgeInsets.only(right: 12),
+        decoration: BoxDecoration(color: c.yellow.withOpacity(0.15), borderRadius: BorderRadius.circular(6), border: Border.all(color: c.yellow.withOpacity(0.3))),
+        child: Text('DEMO', style: TextStyle(color: c.yellow, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+      ),
       GestureDetector(
         onTap: () {
           final cubit = context.read<TradingAnalyticsCubit>();
@@ -299,7 +313,7 @@ class _Metrics extends StatelessWidget {
         Row(children: [
           Text(m.$1, style: TextStyle(color: c.textSecondary, fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 0.3)),
           const SizedBox(width: 4),
-          _hint(m.$1),
+          _hint(m.$1, c),
         ]),
         const SizedBox(height: 6),
         Text(m.$2, style: TextStyle(color: m.$3, fontSize: 28, fontWeight: FontWeight.w800)),
@@ -637,10 +651,10 @@ class _MonthlyTable extends StatelessWidget {
       Text('MONTHLY SUMMARY', style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1)),
       const SizedBox(height: 14),
       Row(children: [
-        const SizedBox(width: 70, child: Text('MONTH', style: TextStyle(color: Color(0xFF64748B), fontSize: 9, fontWeight: FontWeight.w600))),
-        const Expanded(child: Text('P/L', style: TextStyle(color: Color(0xFF64748B), fontSize: 9, fontWeight: FontWeight.w600))),
-        const SizedBox(width: 40, child: Text('WIN%', style: TextStyle(color: Color(0xFF64748B), fontSize: 9, fontWeight: FontWeight.w600), textAlign: TextAlign.right)),
-        const SizedBox(width: 30, child: Text('#', style: TextStyle(color: Color(0xFF64748B), fontSize: 9, fontWeight: FontWeight.w600), textAlign: TextAlign.right)),
+        SizedBox(width: 70, child: Text('MONTH', style: TextStyle(color: c.textSecondary, fontSize: 9, fontWeight: FontWeight.w600))),
+        Expanded(child: Text('P/L', style: TextStyle(color: c.textSecondary, fontSize: 9, fontWeight: FontWeight.w600))),
+        SizedBox(width: 40, child: Text('WIN%', style: TextStyle(color: c.textSecondary, fontSize: 9, fontWeight: FontWeight.w600), textAlign: TextAlign.right)),
+        SizedBox(width: 30, child: Text('#', style: TextStyle(color: c.textSecondary, fontSize: 9, fontWeight: FontWeight.w600), textAlign: TextAlign.right)),
       ]),
       Divider(color: c.border, height: 16),
       ...m.entries.take(6).map((e) { final s = e.value; final cl = s.totalPl >= 0 ? c.green : c.red; final sign = s.totalPl >= 0 ? '+' : '';
@@ -744,22 +758,135 @@ class _RrDist extends StatelessWidget {
 // LOGIN
 // =============================================================================
 
-class _LoginForm extends StatelessWidget {
+class _LoginForm extends StatefulWidget {
   const _LoginForm({required this.emailCtrl, required this.passwordCtrl});
   final TextEditingController emailCtrl, passwordCtrl;
-  @override Widget build(BuildContext context) { final c = AppThemeScope.of(context).colors;
-    return BlocBuilder<TradingAnalyticsCubit, TradingAnalyticsState>(builder: (context, state) => Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 400),
-      child: Padding(padding: const EdgeInsets.all(32), child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Icon(Icons.show_chart, size: 40, color: c.green), const SizedBox(height: 20),
-        Text('Investlink Analytics', style: TextStyle(color: c.textPrimary, fontSize: 24, fontWeight: FontWeight.w700)), const SizedBox(height: 8),
-        Text('Sign in with staging credentials', style: TextStyle(color: c.textSecondary, fontSize: 14)), const SizedBox(height: 32),
-        TextField(controller: emailCtrl, decoration: InputDecoration(hintText: 'Email', prefixIcon: Icon(Icons.email_outlined, color: c.textSecondary, size: 18))), const SizedBox(height: 12),
-        TextField(controller: passwordCtrl, obscureText: true, onSubmitted: (_) => _go(context), decoration: InputDecoration(hintText: 'Password', prefixIcon: Icon(Icons.lock_outlined, color: c.textSecondary, size: 18))), const SizedBox(height: 24),
-        SizedBox(width: double.infinity, height: 46, child: ElevatedButton(onPressed: () => _go(context), child: Text(state.hasSavedCredentials ? 'Quick Sign In' : 'Sign In'))),
-        if (state.hasSavedCredentials) ...[const SizedBox(height: 12), Text('Saved: ${state.savedEmail}', style: TextStyle(color: c.textSecondary, fontSize: 12))],
-      ])))));
+  @override State<_LoginForm> createState() => _LoginFormState();
+}
+
+class _LoginFormState extends State<_LoginForm> {
+  bool _showLogin = false;
+
+  Future<void> _onDemo() async {
+    // Collect lead before demo.
+    final hasLead = await LeadService.hasLead();
+    if (!hasLead && mounted) {
+      final ok = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const _TradingLeadDialog(),
+      );
+      if (ok != true || !mounted) return;
+    }
+    if (mounted) context.read<TradingAnalyticsCubit>().loadDemo();
   }
-  void _go(BuildContext ctx) { final e = emailCtrl.text.trim(), p = passwordCtrl.text.trim(); if (e.isEmpty || p.isEmpty) return; ctx.read<TradingAnalyticsCubit>().loginAndLoad(e, p); }
+
+  void _onLogin() {
+    final e = widget.emailCtrl.text.trim();
+    final p = widget.passwordCtrl.text.trim();
+    if (e.isEmpty || p.isEmpty) return;
+    context.read<TradingAnalyticsCubit>().loginAndLoad(e, p);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppThemeScope.of(context);
+    final c = t.colors;
+    final s = t.strings;
+
+    return BlocBuilder<TradingAnalyticsCubit, TradingAnalyticsState>(
+      builder: (context, state) => Center(
+        child: SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SvgPicture.asset('assets/svg/ic_logo.svg', height: 40),
+                  const SizedBox(height: 16),
+                  Text('Trading Analytics', style: TextStyle(color: c.textPrimary, fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+                  const SizedBox(height: 32),
+
+                  // Demo button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton.icon(
+                      onPressed: _onDemo,
+                      icon: const Icon(Icons.play_arrow_rounded),
+                      label: Text(s.tradingDemoButton, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Divider
+                  Row(children: [
+                    Expanded(child: Divider(color: c.border)),
+                    Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Text(s.tradingOrDivider, style: TextStyle(color: c.textSecondary, fontSize: 13))),
+                    Expanded(child: Divider(color: c.border)),
+                  ]),
+                  const SizedBox(height: 24),
+
+                  if (!_showLogin) ...[
+                    // Already client
+                    Text(s.tradingAlreadyClient, style: TextStyle(color: c.textSecondary, fontSize: 14)),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 46,
+                      child: OutlinedButton(
+                        onPressed: () => setState(() => _showLogin = true),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: c.border),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: Text(s.tradingSignIn, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w600)),
+                      ),
+                    ),
+                  ] else ...[
+                    // Login fields
+                    TextField(controller: widget.emailCtrl, decoration: InputDecoration(hintText: 'Email', prefixIcon: Icon(Icons.email_outlined, color: c.textSecondary, size: 18))),
+                    const SizedBox(height: 12),
+                    TextField(controller: widget.passwordCtrl, obscureText: true, onSubmitted: (_) => _onLogin(), decoration: InputDecoration(hintText: 'Password', prefixIcon: Icon(Icons.lock_outlined, color: c.textSecondary, size: 18))),
+                    const SizedBox(height: 16),
+                    SizedBox(width: double.infinity, height: 46, child: ElevatedButton(onPressed: _onLogin, child: Text(state.hasSavedCredentials ? 'Quick Sign In' : s.tradingSignIn))),
+                    if (state.hasSavedCredentials) ...[const SizedBox(height: 8), Text('Saved: ${state.savedEmail}', style: TextStyle(color: c.textSecondary, fontSize: 12))],
+                  ],
+
+                  const SizedBox(height: 32),
+
+                  // Open account CTA
+                  Text(s.tradingNoAccount, style: TextStyle(color: c.textSecondary, fontSize: 13)),
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: () => _openUrl(AppThemeScope.of(context).strings.investlinkUrl),
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: c.green.withOpacity(0.3)),
+                          borderRadius: BorderRadius.circular(12),
+                          color: c.green.withOpacity(0.06),
+                        ),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(Icons.open_in_new_rounded, size: 16, color: c.green),
+                          const SizedBox(width: 8),
+                          Text(s.tradingOpenAccount, style: TextStyle(color: c.green, fontSize: 14, fontWeight: FontWeight.w600)),
+                        ]),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // =============================================================================
@@ -887,7 +1014,7 @@ class _PortfolioPage extends StatelessWidget {
     _downloadFile('portfolio_${DateFormat('yyyyMMdd').format(DateTime.now())}.csv', buf.toString());
   }
 
-  static const _hdr = TextStyle(color: Color(0xFF64748B), fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 0.3);
+  TextStyle get _hdr => TextStyle(color: c.textSecondary, fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 0.3);
 }
 
 // Mini sparkline painter.
@@ -1012,12 +1139,12 @@ class _OrdersPage extends StatelessWidget {
       case 'filled': return c.green;
       case 'canceled': case 'cancelled': return c.red;
       case 'partially_filled': return c.yellow;
-      case 'new': case 'accepted': return const Color(0xFF818CF8);
+      case 'new': case 'accepted': return c.yellow;
       default: return c.textSecondary;
     }
   }
 
-  static const _hdr = TextStyle(color: Color(0xFF64748B), fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 0.3);
+  TextStyle get _hdr => TextStyle(color: c.textSecondary, fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 0.3);
 }
 
 // =============================================================================
@@ -1176,6 +1303,293 @@ class _AiPage extends StatelessWidget {
 }
 
 // =============================================================================
+// STRATEGIES PAGE
+// =============================================================================
+
+class _StrategiesPage extends StatelessWidget {
+  const _StrategiesPage({required this.c, required this.state});
+  final AppColors c; final TradingAnalyticsState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final strategies = state.strategies;
+    final positions = state.positions;
+    final totalPortfolioValue = positions.fold<double>(0, (s, p) => s + p.marketValue);
+
+    if (strategies.isEmpty) {
+      return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Icon(Icons.pie_chart_rounded, size: 48, color: c.textSecondary),
+        const SizedBox(height: 12),
+        Text('No strategies yet', style: TextStyle(color: c.textSecondary, fontSize: 16)),
+        const SizedBox(height: 8),
+        Text('Create your first strategy to organize positions', style: TextStyle(color: c.textSecondary, fontSize: 13)),
+      ]));
+    }
+
+    // Positions not assigned to any strategy.
+    final assignedSymbols = strategies.expand((s) => s.symbols).toSet();
+    final unassigned = positions.where((p) => !assignedSymbols.contains(p.symbol)).toList();
+
+    return ListView(padding: const EdgeInsets.all(20), children: [
+      // ── Overview row: total allocation pie + summary cards ──
+      _OverviewSection(c: c, strategies: strategies, positions: positions, totalValue: totalPortfolioValue),
+      const SizedBox(height: 20),
+
+      // ── Strategy cards ──
+      for (final strategy in strategies) ...[
+        _StrategyCard(c: c, strategy: strategy, positions: positions, totalValue: totalPortfolioValue),
+        const SizedBox(height: 12),
+      ],
+
+      // ── Unassigned positions ──
+      if (unassigned.isNotEmpty) ...[
+        const SizedBox(height: 8),
+        _UnassignedCard(c: c, positions: unassigned, totalValue: totalPortfolioValue),
+      ],
+
+      const SizedBox(height: 32),
+    ]);
+  }
+}
+
+// ── Overview with pie chart ──
+class _OverviewSection extends StatelessWidget {
+  const _OverviewSection({required this.c, required this.strategies, required this.positions, required this.totalValue});
+  final AppColors c; final List<StrategyEntity> strategies; final List<TradingPositionDto> positions; final double totalValue;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      // Pie chart
+      Container(
+        width: 240,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16), border: Border.all(color: c.border)),
+        child: Column(children: [
+          Text('ALLOCATION', style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1)),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: 140, height: 140,
+            child: CustomPaint(painter: _PieChartPainter(
+              segments: strategies.map((s) {
+                final val = s.totalValue(positions);
+                return _PieSegment(value: val, color: s.color);
+              }).toList(),
+              trackColor: c.border,
+            )),
+          ),
+          const SizedBox(height: 16),
+          // Legend
+          ...strategies.map((s) {
+            final pct = totalValue > 0 ? (s.totalValue(positions) / totalValue * 100) : 0.0;
+            return Padding(padding: const EdgeInsets.only(bottom: 6), child: Row(children: [
+              Container(width: 10, height: 10, decoration: BoxDecoration(color: s.color, borderRadius: BorderRadius.circular(3))),
+              const SizedBox(width: 8),
+              Expanded(child: Text(s.name, style: TextStyle(color: c.textPrimary, fontSize: 12))),
+              Text('${pct.toStringAsFixed(1)}%', style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+            ]));
+          }),
+        ]),
+      ),
+      const SizedBox(width: 12),
+
+      // Summary cards
+      Expanded(child: Column(children: [
+        Row(children: [
+          _summaryTile('TOTAL VALUE', '\$${_fmt(totalValue)}', c.textPrimary, c),
+          const SizedBox(width: 12),
+          _summaryTile('STRATEGIES', '${strategies.length}', c.textPrimary, c),
+        ]),
+        const SizedBox(height: 12),
+        Row(children: [
+          ...strategies.map((s) {
+            final pl = s.totalPl(positions);
+            final plColor = pl >= 0 ? c.green : c.red;
+            final sign = pl >= 0 ? '+' : '';
+            return Expanded(child: Container(
+              margin: EdgeInsets.only(right: s != strategies.last ? 12 : 0),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(12), border: Border.all(color: c.border)),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Container(width: 8, height: 8, decoration: BoxDecoration(color: s.color, shape: BoxShape.circle)),
+                  const SizedBox(width: 8),
+                  Text(s.name.toUpperCase(), style: TextStyle(color: c.textSecondary, fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+                ]),
+                const SizedBox(height: 8),
+                Text('$sign\$${_fmt(pl)}', style: TextStyle(color: plColor, fontSize: 20, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 2),
+                Text('${s.avgPlPercent(positions).toStringAsFixed(1)}%', style: TextStyle(color: plColor, fontSize: 12)),
+              ]),
+            ));
+          }),
+        ]),
+      ])),
+    ]);
+  }
+
+  Widget _summaryTile(String label, String value, Color vc, AppColors c) => Expanded(child: Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(12), border: Border.all(color: c.border)),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: TextStyle(color: c.textSecondary, fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+      const SizedBox(height: 6),
+      Text(value, style: TextStyle(color: vc, fontSize: 22, fontWeight: FontWeight.w800)),
+    ]),
+  ));
+}
+
+// ── Strategy card with positions table ──
+class _StrategyCard extends StatelessWidget {
+  const _StrategyCard({required this.c, required this.strategy, required this.positions, required this.totalValue});
+  final AppColors c; final StrategyEntity strategy; final List<TradingPositionDto> positions; final double totalValue;
+
+  @override
+  Widget build(BuildContext context) {
+    final strategyPositions = strategy.filterPositions(positions);
+    final stratValue = strategy.totalValue(positions);
+    final stratPl = strategy.totalPl(positions);
+    final plColor = stratPl >= 0 ? c.green : c.red;
+    final plSign = stratPl >= 0 ? '+' : '';
+    final allocationPct = totalValue > 0 ? (stratValue / totalValue * 100) : 0.0;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16), border: Border.all(color: c.border)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // Header
+        Row(children: [
+          Container(
+            width: 36, height: 36,
+            decoration: BoxDecoration(color: strategy.color.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
+            child: Icon(strategy.icon, size: 18, color: strategy.color),
+          ),
+          const SizedBox(width: 14),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(strategy.name, style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+            if (strategy.description.isNotEmpty) Text(strategy.description, style: TextStyle(color: c.textSecondary, fontSize: 12)),
+          ])),
+          // Stats
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text('\$${_fmt(stratValue)}', style: TextStyle(color: c.textPrimary, fontSize: 18, fontWeight: FontWeight.w800)),
+            Row(children: [
+              Text('$plSign\$${_fmt(stratPl)}', style: TextStyle(color: plColor, fontSize: 13, fontWeight: FontWeight.w600)),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(color: strategy.color.withOpacity(0.12), borderRadius: BorderRadius.circular(6)),
+                child: Text('${allocationPct.toStringAsFixed(0)}%', style: TextStyle(color: strategy.color, fontSize: 11, fontWeight: FontWeight.w700)),
+              ),
+            ]),
+          ]),
+        ]),
+
+        if (strategyPositions.isNotEmpty) ...[
+          Divider(color: c.border, height: 28),
+          // Positions table
+          ...strategyPositions.map((p) {
+            final posPlColor = p.profitCash >= 0 ? c.green : c.red;
+            final posSign = p.profitCash >= 0 ? '+' : '';
+            return Padding(padding: const EdgeInsets.only(bottom: 8), child: Row(children: [
+              Container(
+                width: 32, height: 32,
+                decoration: BoxDecoration(color: c.border.withOpacity(0.4), borderRadius: BorderRadius.circular(8)),
+                child: Center(child: Text(p.symbol.length > 3 ? p.symbol.substring(0, 3) : p.symbol, style: TextStyle(color: c.textPrimary, fontSize: 9, fontWeight: FontWeight.w700))),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(p.symbol, style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+                Text('${p.qty.toStringAsFixed(0)} shares · \$${p.avgEntryPrice.toStringAsFixed(2)}', style: TextStyle(color: c.textSecondary, fontSize: 11)),
+              ])),
+              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                Text('\$${_fmt(p.marketValue)}', style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+                Text('$posSign\$${_fmt(p.profitCash)} (${p.profitPercent.toStringAsFixed(1)}%)', style: TextStyle(color: posPlColor, fontSize: 11)),
+              ]),
+            ]));
+          }),
+        ] else
+          Padding(padding: const EdgeInsets.only(top: 12), child: Text('No positions assigned', style: TextStyle(color: c.textSecondary, fontSize: 12))),
+      ]),
+    );
+  }
+}
+
+// ── Unassigned positions card ──
+class _UnassignedCard extends StatelessWidget {
+  const _UnassignedCard({required this.c, required this.positions, required this.totalValue});
+  final AppColors c; final List<TradingPositionDto> positions; final double totalValue;
+
+  @override
+  Widget build(BuildContext context) {
+    final unValue = positions.fold<double>(0, (s, p) => s + p.marketValue);
+    final pct = totalValue > 0 ? (unValue / totalValue * 100) : 0.0;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16), border: Border.all(color: c.border, width: 1), ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(Icons.help_outline_rounded, size: 18, color: c.textSecondary),
+          const SizedBox(width: 10),
+          Text('UNASSIGNED', style: TextStyle(color: c.textSecondary, fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+          const Spacer(),
+          Text('${pct.toStringAsFixed(0)}% · \$${_fmt(unValue)}', style: TextStyle(color: c.textSecondary, fontSize: 13)),
+        ]),
+        Divider(color: c.border, height: 20),
+        ...positions.map((p) => Padding(padding: const EdgeInsets.only(bottom: 6), child: Row(children: [
+          Text(p.symbol, style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.w500)),
+          const Spacer(),
+          Text('\$${_fmt(p.marketValue)}', style: TextStyle(color: c.textSecondary, fontSize: 12)),
+        ]))),
+      ]),
+    );
+  }
+}
+
+// ── Pie chart painter ──
+class _PieSegment {
+  const _PieSegment({required this.value, required this.color});
+  final double value; final Color color;
+}
+
+class _PieChartPainter extends CustomPainter {
+  _PieChartPainter({required this.segments, required this.trackColor});
+  final List<_PieSegment> segments; final Color trackColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final r = size.width / 2 - 4;
+    const strokeWidth = 20.0;
+    const gap = 0.04; // gap between segments in radians
+
+    // Track
+    canvas.drawCircle(center, r, Paint()..color = trackColor..style = PaintingStyle.stroke..strokeWidth = strokeWidth);
+
+    final total = segments.fold<double>(0, (s, seg) => s + seg.value);
+    if (total <= 0) return;
+
+    var startAngle = -math.pi / 2;
+    for (final seg in segments) {
+      final sweep = (seg.value / total) * (2 * math.pi) - gap;
+      if (sweep > 0) {
+        canvas.drawArc(
+          Rect.fromCircle(center: center, radius: r),
+          startAngle,
+          sweep,
+          false,
+          Paint()..color = seg.color..style = PaintingStyle.stroke..strokeWidth = strokeWidth..strokeCap = StrokeCap.round,
+        );
+      }
+      startAngle += sweep + gap;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _PieChartPainter old) => segments.length != old.segments.length;
+}
+
+// =============================================================================
 // CSV DOWNLOAD (web)
 // =============================================================================
 
@@ -1190,6 +1604,130 @@ void _downloadFile(String filename, String content) {
 }
 
 // =============================================================================
+// OPEN URL (web)
+// =============================================================================
+
+void _openUrl(String url) {
+  html.window.open(url, '_blank');
+}
+
+// =============================================================================
+// TRADING LEAD DIALOG (reuses LeadService)
+// =============================================================================
+
+class _TradingLeadDialog extends StatefulWidget {
+  const _TradingLeadDialog();
+  @override State<_TradingLeadDialog> createState() => _TradingLeadDialogState();
+}
+
+class _TradingLeadDialogState extends State<_TradingLeadDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _firstCtrl = TextEditingController();
+  final _lastCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _whatsappCtrl = TextEditingController();
+  bool _submitting = false;
+
+  @override
+  void dispose() { _firstCtrl.dispose(); _lastCtrl.dispose(); _emailCtrl.dispose(); _whatsappCtrl.dispose(); super.dispose(); }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _submitting = true);
+    final lead = LeadData(firstName: _firstCtrl.text.trim(), lastName: _lastCtrl.text.trim(), email: _emailCtrl.text.trim(), whatsapp: _whatsappCtrl.text.trim(), source: 'trading_demo');
+    await LeadService.save(lead);
+    AnalyticsService.instance.track('lead_submitted', {'email': lead.email, 'source': 'trading_demo'});
+    if (mounted) Navigator.of(context).pop(true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppThemeScope.of(context);
+    final c = t.colors;
+    final s = t.strings;
+    return Dialog(
+      backgroundColor: c.bg,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: c.border)),
+      child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 440), child: Padding(padding: const EdgeInsets.all(32), child: Form(key: _formKey, child: Column(mainAxisSize: MainAxisSize.min, children: [
+        SvgPicture.asset('assets/svg/ic_logo.svg', height: 36),
+        const SizedBox(height: 20),
+        Text(s.leadTitle, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: c.textPrimary, letterSpacing: -0.5)),
+        const SizedBox(height: 8),
+        Text(s.leadSubtitle, textAlign: TextAlign.center, style: TextStyle(fontSize: 14, color: c.textSecondary)),
+        const SizedBox(height: 28),
+        Row(children: [
+          Expanded(child: TextFormField(controller: _firstCtrl, textCapitalization: TextCapitalization.words,
+            decoration: InputDecoration(hintText: s.leadFirstName, prefixIcon: Icon(Icons.person_outline, color: c.textSecondary, size: 18)),
+            validator: (v) => v == null || v.trim().isEmpty ? s.leadFirstNameRequired : null)),
+          const SizedBox(width: 12),
+          Expanded(child: TextFormField(controller: _lastCtrl, textCapitalization: TextCapitalization.words, decoration: InputDecoration(hintText: s.leadLastName))),
+        ]),
+        const SizedBox(height: 12),
+        TextFormField(controller: _emailCtrl, keyboardType: TextInputType.emailAddress,
+          decoration: InputDecoration(hintText: s.leadEmail, prefixIcon: Icon(Icons.email_outlined, color: c.textSecondary, size: 18)),
+          validator: (v) { if (v == null || v.trim().isEmpty) return s.leadEmailRequired; if (!v.contains('@') || !v.contains('.')) return s.leadEmailInvalid; return null; }),
+        const SizedBox(height: 12),
+        TextFormField(controller: _whatsappCtrl, keyboardType: TextInputType.phone, decoration: InputDecoration(hintText: s.leadWhatsapp, prefixIcon: Icon(Icons.phone_outlined, color: c.textSecondary, size: 18))),
+        const SizedBox(height: 24),
+        SizedBox(width: double.infinity, height: 50, child: ElevatedButton(
+          onPressed: _submitting ? null : _submit,
+          child: _submitting ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: c.isDark ? Colors.black : Colors.white)) : Text(s.leadSubmit, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)))),
+        const SizedBox(height: 16),
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Icon(Icons.lock_outline, size: 14, color: c.textSecondary), const SizedBox(width: 6),
+          Text(s.leadPrivacy, style: TextStyle(fontSize: 12, color: c.textSecondary)),
+        ]),
+      ])))),
+    );
+  }
+}
+
+// =============================================================================
+// CTA BANNER
+// =============================================================================
+
+class CtaBanner extends StatelessWidget {
+  const CtaBanner({required this.c, super.key});
+  final AppColors c;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppThemeScope.of(context).strings;
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: c.gold.withOpacity(0.25)),
+        gradient: LinearGradient(
+          colors: [c.gold.withOpacity(0.06), c.gold.withOpacity(0.02)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Row(children: [
+        SvgPicture.asset('assets/svg/ic_logo.svg', height: 28),
+        const SizedBox(width: 16),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(s.tradingCtaTitle, style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          Text(s.tradingCtaSubtitle, style: TextStyle(color: c.textSecondary, fontSize: 13)),
+        ])),
+        const SizedBox(width: 16),
+        GestureDetector(
+          onTap: () => _openUrl(AppThemeScope.of(context).strings.investlinkUrl),
+          child: MouseRegion(cursor: SystemMouseCursors.click, child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            decoration: BoxDecoration(color: c.gold, borderRadius: BorderRadius.circular(10)),
+            child: Text(s.tradingCtaButton, style: const TextStyle(color: Color(0xFF212129), fontSize: 13, fontWeight: FontWeight.w600)),
+          )),
+        ),
+      ]),
+    );
+  }
+}
+
+// =============================================================================
 // HELPERS
 // =============================================================================
 
@@ -1198,7 +1736,7 @@ String _fmt(double v) { final a = v.abs(); if (a >= 1000000) return '${(v / 1000
 String _fmtK(double v) { if (v.abs() >= 1000) return '\$${(v / 1000).toStringAsFixed(0)}k'; return '\$${v.toStringAsFixed(0)}'; }
 Color _plC(double v, AppColors c) => v > 0 ? c.green : v < 0 ? c.red : c.textPrimary;
 
-Widget _hint(String key) {
+Widget _hint(String key, AppColors c) {
   const h = <String, String>{
     'TOTAL P/L': 'Суммарная прибыль/убыток', 'WIN RATE %': 'Процент прибыльных сделок',
     'PROFIT FACTOR': '>1 = прибыльная торговля', 'TOTAL TRADES': 'Количество закрытых сделок',
@@ -1207,5 +1745,5 @@ Widget _hint(String key) {
   };
   final tip = h[key]; if (tip == null) return const SizedBox.shrink();
   return Tooltip(message: tip, waitDuration: const Duration(milliseconds: 200),
-    child: const MouseRegion(cursor: SystemMouseCursors.help, child: Icon(Icons.help_outline_rounded, size: 12, color: Color(0xFF64748B))));
+    child: MouseRegion(cursor: SystemMouseCursors.help, child: Icon(Icons.help_outline_rounded, size: 12, color: c.textSecondary)));
 }

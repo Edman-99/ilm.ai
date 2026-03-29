@@ -16,6 +16,9 @@ class AppColors {
     required this.red,
     required this.accent,
     required this.yellow,
+    required this.gold,
+    required this.cardHover,
+    required this.cardActive,
     required this.isDark,
   });
 
@@ -30,6 +33,9 @@ class AppColors {
     red: Color(0xFFDC2626),
     accent: Color(0xFF0A0A0A),
     yellow: Color(0xFFD97706),
+    gold: Color(0xFFEEB501),
+    cardHover: Color(0xFFF5F5F5),
+    cardActive: Color(0xFFF0F0F0),
     isDark: false,
   );
 
@@ -44,6 +50,9 @@ class AppColors {
     red: Color(0xFFEF4444),
     accent: Color(0xFFFFFFFF),
     yellow: Color(0xFFFBBF24),
+    gold: Color(0xFFF3CC50),
+    cardHover: Color(0xFF141414),
+    cardActive: Color(0xFF1A1A1A),
     isDark: true,
   );
 
@@ -57,6 +66,9 @@ class AppColors {
   final Color red;
   final Color accent;
   final Color yellow;
+  final Color gold;
+  final Color cardHover;
+  final Color cardActive;
   final bool isDark;
 
   Color scoreColor(int score) {
@@ -144,6 +156,33 @@ class ThemeNotifier extends ChangeNotifier {
       dividerColor: c.border,
     );
   }
+}
+
+/// Layout constants.
+class AppLayout {
+  AppLayout._();
+
+  // Breakpoints
+  static const double breakpointWide = 960;
+  static const double breakpointTablet = 640;
+
+  // Border radius
+  static const double radiusS = 8;
+  static const double radiusM = 12;
+  static const double radiusL = 16;
+
+  // Spacing
+  static const double spaceXS = 4;
+  static const double spaceS = 8;
+  static const double spaceM = 12;
+  static const double spaceL = 16;
+  static const double spaceXL = 24;
+  static const double spaceXXL = 32;
+
+  // Max widths
+  static const double maxWidthNarrow = 520;
+  static const double maxWidthMedium = 680;
+  static const double maxWidthWide = 1140;
 }
 
 /// Доступ к цветам и строкам через InheritedWidget.

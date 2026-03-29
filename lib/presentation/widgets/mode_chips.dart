@@ -7,15 +7,11 @@ class ModeChips extends StatelessWidget {
   const ModeChips({
     required this.selected,
     required this.onSelected,
-    this.isModeLocked,
-    this.onLockedTap,
     super.key,
   });
 
   final String selected;
   final ValueChanged<String> onSelected;
-  final bool Function(String mode)? isModeLocked;
-  final VoidCallback? onLockedTap;
 
   @override
   Widget build(BuildContext context) {
@@ -47,15 +43,11 @@ class ModeChips extends StatelessWidget {
                           return const SizedBox.shrink();
                         }
                         final entry = entries[idx];
-                        final locked = isModeLocked?.call(entry.key) ?? false;
                         return _ModeCard(
                           info: entry.value,
                           isActive: entry.key == selected,
-                          isLocked: locked,
                           colors: c,
-                          onTap: locked
-                              ? (onLockedTap ?? () {})
-                              : () => onSelected(entry.key),
+                          onTap: () => onSelected(entry.key),
                         );
                       }(),
                     ),
@@ -73,14 +65,12 @@ class _ModeCard extends StatefulWidget {
   const _ModeCard({
     required this.info,
     required this.isActive,
-    required this.isLocked,
     required this.colors,
     required this.onTap,
   });
 
   final ModeInfo info;
   final bool isActive;
-  final bool isLocked;
   final AppColors colors;
   final VoidCallback onTap;
 
@@ -96,7 +86,6 @@ class _ModeCardState extends State<_ModeCard> {
     final c = widget.colors;
     final info = widget.info;
     final isActive = widget.isActive;
-    final isLocked = widget.isLocked;
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -110,9 +99,9 @@ class _ModeCardState extends State<_ModeCard> {
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: isActive
-                ? (c.isDark ? const Color(0xFF141414) : const Color(0xFFF0F0F0))
+                ? c.cardActive
                 : _hovered
-                    ? (c.isDark ? const Color(0xFF111111) : const Color(0xFFF5F5F5))
+                    ? c.cardHover
                     : c.bg,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
@@ -135,70 +124,51 @@ class _ModeCardState extends State<_ModeCard> {
                   ]
                 : [],
           ),
-          child: Opacity(
-            opacity: isLocked ? 0.5 : 1.0,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Title + check/lock
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        info.label,
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w600,
-                          color: c.textPrimary,
-                        ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Title + check
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      info.label,
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                        color: c.textPrimary,
                       ),
                     ),
-                    if (isLocked)
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.lock_rounded, size: 14, color: c.textSecondary),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Pro',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: c.textSecondary,
-                            ),
-                          ),
-                        ],
-                      )
-                    else if (isActive)
-                      Icon(Icons.check_circle_rounded, size: 20, color: c.accent),
-                  ],
-                ),
-
-                const SizedBox(height: 4),
-
-                // Bank
-                Text(
-                  info.bank,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: c.textSecondary,
                   ),
-                ),
+                  if (isActive)
+                    Icon(Icons.check_circle_rounded, size: 20, color: c.accent),
+                ],
+              ),
 
-                const SizedBox(height: 10),
+              const SizedBox(height: 4),
 
-                // Description
-                Text(
-                  info.description,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: c.textSecondary,
-                    height: 1.5,
-                  ),
+              // Bank
+              Text(
+                info.bank,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: c.textSecondary,
                 ),
-              ],
-            ),
+              ),
+
+              const SizedBox(height: 10),
+
+              // Description
+              Text(
+                info.description,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: c.textSecondary,
+                  height: 1.5,
+                ),
+              ),
+            ],
           ),
         ),
       ),

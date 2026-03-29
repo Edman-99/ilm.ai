@@ -1,5 +1,3 @@
-import 'package:ai_stock_analyzer/data/user_plan.dart';
-
 class ModeInfo {
   const ModeInfo({
     required this.label,
@@ -36,45 +34,17 @@ class AppStrings {
     // Home / Steps
     required this.enterTicker,
     required this.tickerHint,
-    required this.next,
-    required this.back,
-    required this.startAnalysis,
     required this.analyze,
     required this.recentAnalyses,
+    required this.emptyHistory,
     required this.error,
-    required this.unlimited,
+    // Tabs
+    required this.tabAiAnalysis,
+    required this.tabTradingAnalytics,
     // How it works
     required this.howItWorks,
     required this.howItWorksSubtitle,
     required this.howItWorksSteps,
-    // Auth
-    required this.login,
-    required this.register,
-    required this.emailHint,
-    required this.passwordHint,
-    required this.enterEmailAndPassword,
-    required this.createAccount,
-    required this.loginButton,
-    required this.registerButton,
-    required this.noAccount,
-    required this.haveAccount,
-    required this.accountNotFound,
-    required this.wrongPassword,
-    required this.emailTaken,
-    // Pricing
-    required this.choosePlan,
-    required this.choosePlanSubtitle,
-    required this.currentPlan,
-    required this.select,
-    required this.popular,
-    required this.comingSoon,
-    required this.perMonth,
-    required this.analysesPerDay,
-    required this.unlimitedLabel,
-    // Plan features
-    required this.freePlanFeatures,
-    required this.proPlanFeatures,
-    required this.premiumPlanFeatures,
     // Result page
     required this.overview,
     required this.quickVerdict,
@@ -110,41 +80,31 @@ class AppStrings {
     required this.copied,
     // Disclaimer
     required this.disclaimer,
-    // Portfolio builder
-    required this.buildPortfolio,
-    required this.buildPortfolioSubtitle,
-    required this.enterAmount,
-    required this.amountHint,
-    required this.chooseStrategy,
-    required this.strategyConservative,
-    required this.strategyConservativeDesc,
-    required this.strategyModerate,
-    required this.strategyModerateDesc,
-    required this.strategyAggressive,
-    required this.strategyAggressiveDesc,
-    required this.buildingPortfolio,
-    required this.yourPortfolio,
-    required this.expectedReturn,
-    required this.annualRisk,
-    required this.sharpeRatio,
-    required this.allocation,
-    required this.ticker,
-    required this.weight,
-    required this.amount,
-    required this.sector,
-    required this.addToWatchlist,
-    required this.maxDrawdown,
-    required this.rebalancing,
-    required this.rebalancingQuarterly,
-    required this.rebalancingSemiAnnual,
-    required this.shares,
-    required this.priceLabel,
-    required this.name,
-    required this.assetClass,
-    required this.portfolioAnalysis,
-    // Errors (cubit)
-    required this.errorModeUnavailable,
-    required this.errorLimitReached,
+    // Trading CTA
+    required this.tradingDemoButton,
+    required this.tradingOrDivider,
+    required this.tradingAlreadyClient,
+    required this.tradingSignIn,
+    required this.tradingNoAccount,
+    required this.tradingOpenAccount,
+    required this.tradingCtaTitle,
+    required this.tradingCtaSubtitle,
+    required this.tradingCtaButton,
+    required this.tradingDemoLabel,
+    required this.investlinkUrl,
+    // Lead form
+    required this.leadTitle,
+    required this.leadSubtitle,
+    required this.leadFirstName,
+    required this.leadLastName,
+    required this.leadEmail,
+    required this.leadWhatsapp,
+    required this.leadSubmit,
+    required this.leadPrivacy,
+    required this.leadFirstNameRequired,
+    required this.leadEmailRequired,
+    required this.leadEmailInvalid,
+    // Errors
     required this.errorServer,
     required this.errorNoConnection,
     required this.errorGeneric,
@@ -162,66 +122,19 @@ class AppStrings {
   // Home
   final String enterTicker;
   final String tickerHint;
-  final String next;
-  final String back;
-  final String startAnalysis;
   final String analyze;
   final String recentAnalyses;
+  final String emptyHistory;
   final String error;
-  final String unlimited;
+
+  // Tabs
+  final String tabAiAnalysis;
+  final String tabTradingAnalytics;
 
   // How it works
   final String howItWorks;
   final String howItWorksSubtitle;
   final List<HowItWorksStep> howItWorksSteps;
-
-  // Auth
-  final String login;
-  final String register;
-  final String emailHint;
-  final String passwordHint;
-  final String enterEmailAndPassword;
-  final String createAccount;
-  final String loginButton;
-  final String registerButton;
-  final String noAccount;
-  final String haveAccount;
-  final String accountNotFound;
-  final String wrongPassword;
-  final String emailTaken;
-
-  // Pricing
-  final String choosePlan;
-  final String choosePlanSubtitle;
-  final String currentPlan;
-  final String select;
-  final String popular;
-  final String comingSoon;
-  final String perMonth;
-  final String analysesPerDay;
-  final String unlimitedLabel;
-
-  // Plan features
-  final List<PlanFeature> freePlanFeatures;
-  final List<PlanFeature> proPlanFeatures;
-  final List<PlanFeature> premiumPlanFeatures;
-
-  List<PlanFeature> featuresFor(UserPlan plan) {
-    switch (plan) {
-      case UserPlan.free:
-        return freePlanFeatures;
-      case UserPlan.pro:
-        return proPlanFeatures;
-      case UserPlan.premium:
-        return premiumPlanFeatures;
-    }
-  }
-
-  String dailyLimitLabel(int limit) =>
-      limit < 0 ? unlimitedLabel : '$limit $analysesPerDay';
-
-  String rebalancingLabel(String frequency) =>
-      frequency == 'semi-annual' ? rebalancingSemiAnnual : rebalancingQuarterly;
 
   // Result page
   final String overview;
@@ -257,39 +170,6 @@ class AppStrings {
   // Disclaimer
   final String disclaimer;
 
-  // Portfolio builder
-  final String buildPortfolio;
-  final String buildPortfolioSubtitle;
-  final String enterAmount;
-  final String amountHint;
-  final String chooseStrategy;
-  final String strategyConservative;
-  final String strategyConservativeDesc;
-  final String strategyModerate;
-  final String strategyModerateDesc;
-  final String strategyAggressive;
-  final String strategyAggressiveDesc;
-  final String buildingPortfolio;
-  final String yourPortfolio;
-  final String expectedReturn;
-  final String annualRisk;
-  final String sharpeRatio;
-  final String allocation;
-  final String ticker;
-  final String weight;
-  final String amount;
-  final String sector;
-  final String addToWatchlist;
-  final String maxDrawdown;
-  final String rebalancing;
-  final String rebalancingQuarterly;
-  final String rebalancingSemiAnnual;
-  final String shares;
-  final String priceLabel;
-  final String name;
-  final String assetClass;
-  final String portfolioAnalysis;
-
   // Score
   final String outOf100;
   final String signalBuy;
@@ -302,21 +182,44 @@ class AppStrings {
     return signalSell;
   }
 
+  // Trading CTA
+  final String tradingDemoButton;
+  final String tradingOrDivider;
+  final String tradingAlreadyClient;
+  final String tradingSignIn;
+  final String tradingNoAccount;
+  final String tradingOpenAccount;
+  final String tradingCtaTitle;
+  final String tradingCtaSubtitle;
+  final String tradingCtaButton;
+  final String tradingDemoLabel;
+  final String investlinkUrl;
+
+  // Lead form
+  final String leadTitle;
+  final String leadSubtitle;
+  final String leadFirstName;
+  final String leadLastName;
+  final String leadEmail;
+  final String leadWhatsapp;
+  final String leadSubmit;
+  final String leadPrivacy;
+  final String leadFirstNameRequired;
+  final String leadEmailRequired;
+  final String leadEmailInvalid;
+
   // Errors
-  final String errorModeUnavailable;
-  final String errorLimitReached;
   final String errorServer;
   final String errorNoConnection;
   final String errorGeneric;
 
-  String errorServerWithCode(int code) =>
-      '$errorServer ($code)';
+  String errorServerWithCode(int code) => '$errorServer ($code)';
 
   // ── RU ──
   static const ru = AppStrings._(
     heroTitle1: 'Анализ акций',
     heroTitle2: 'с помощью ИИ',
-    heroSubtitle: 'Выберите методологию для начала',
+    heroSubtitle: 'Введите тикер и выберите методологию',
     heroRotatingItems: [
       HeroRotatingItem(line1: 'Анализ акций', line2: 'от ILM'),
       HeroRotatingItem(line1: 'Технический анализ', line2: 'от Citadel'),
@@ -381,14 +284,13 @@ class AppStrings {
       ),
     },
     enterTicker: 'Напишите тикер компании',
-    tickerHint: 'Тикер вводится на английском — например AAPL, TSLA, GOOGL',
-    next: 'Далее',
-    back: 'Назад',
-    startAnalysis: 'Запустить анализ?',
+    tickerHint: 'Например AAPL, TSLA, GOOGL',
     analyze: 'Анализировать',
     recentAnalyses: 'Недавние анализы',
+    emptyHistory: 'Ваш первый анализ появится здесь',
     error: 'Ошибка',
-    unlimited: 'Безлимит',
+    tabAiAnalysis: 'AI Анализ',
+    tabTradingAnalytics: 'Trading Analytics',
     howItWorks: 'Как это работает',
     howItWorksSubtitle: 'Три простых шага до профессионального анализа',
     howItWorksSteps: [
@@ -407,52 +309,6 @@ class AppStrings {
         description:
             'Детальный анализ со скором, индикаторами и рекомендациями',
       ),
-    ],
-    login: 'Войти',
-    register: 'Регистрация',
-    emailHint: 'Email',
-    passwordHint: 'Пароль',
-    enterEmailAndPassword: 'Введите email и пароль',
-    createAccount: 'Создайте аккаунт',
-    loginButton: 'Войти',
-    registerButton: 'Зарегистрироваться',
-    noAccount: 'Нет аккаунта?',
-    haveAccount: 'Уже есть аккаунт?',
-    accountNotFound: 'Аккаунт не найден',
-    wrongPassword: 'Неверный пароль',
-    emailTaken: 'Email уже зарегистрирован',
-    choosePlan: 'Выберите тариф',
-    choosePlanSubtitle: 'Начните бесплатно, обновите когда будете готовы',
-    currentPlan: 'Текущий план',
-    select: 'Выбрать',
-    popular: 'Популярный',
-    comingSoon: 'Coming soon',
-    perMonth: '/мес',
-    analysesPerDay: 'анализов/день',
-    unlimitedLabel: 'Безлимит',
-    freePlanFeatures: [
-      PlanFeature(label: '3 анализа в день', included: true),
-      PlanFeature(label: '1 режим (Технический анализ)', included: true),
-      PlanFeature(label: 'История за 1 день', included: true),
-      PlanFeature(label: 'Экспорт PDF', included: false),
-      PlanFeature(label: 'Портфельный анализ', included: false),
-      PlanFeature(label: 'Приоритет ответа', included: false),
-    ],
-    proPlanFeatures: [
-      PlanFeature(label: '30 анализов в день', included: true),
-      PlanFeature(label: 'Все 9 режимов', included: true),
-      PlanFeature(label: 'История за 30 дней', included: true),
-      PlanFeature(label: 'Экспорт PDF', included: true),
-      PlanFeature(label: 'Портфельный анализ', included: false),
-      PlanFeature(label: 'Приоритет ответа', included: false),
-    ],
-    premiumPlanFeatures: [
-      PlanFeature(label: 'Безлимит анализов', included: true),
-      PlanFeature(label: 'Все 9 режимов', included: true),
-      PlanFeature(label: 'Вся история', included: true),
-      PlanFeature(label: 'Экспорт PDF', included: true),
-      PlanFeature(label: 'Портфельный анализ', included: true),
-      PlanFeature(label: 'Приоритет ответа', included: true),
     ],
     overview: 'Обзор',
     quickVerdict: 'Быстрый вердикт',
@@ -483,40 +339,30 @@ class AppStrings {
     signalSell: 'ПРОДАЖА',
     share: 'Поделиться',
     copied: 'Скопировано!',
-    disclaimer: 'Данный анализ носит информационный характер и не является инвестиционной рекомендацией. Перед принятием инвестиционных решений проконсультируйтесь с финансовым советником.',
-    buildPortfolio: 'Собрать портфель',
-    buildPortfolioSubtitle: 'AI подберёт оптимальный портфель под вашу сумму и стратегию',
-    enterAmount: 'Сумма инвестиций',
-    amountHint: 'Например, 10000',
-    chooseStrategy: 'Выберите стратегию',
-    strategyConservative: 'Консервативная',
-    strategyConservativeDesc: 'Минимальный риск, стабильный доход. Облигации и защитные активы.',
-    strategyModerate: 'Умеренная',
-    strategyModerateDesc: 'Баланс роста и защиты. Акции + облигации + альтернативы.',
-    strategyAggressive: 'Агрессивная',
-    strategyAggressiveDesc: 'Максимальный рост. Технологии, крипто, развивающиеся рынки.',
-    buildingPortfolio: 'Собираем портфель...',
-    yourPortfolio: 'Ваш портфель',
-    expectedReturn: 'Ожидаемая доходность',
-    annualRisk: 'Годовой риск',
-    sharpeRatio: 'Коэффициент Шарпа',
-    allocation: 'Распределение',
-    ticker: 'Тикер',
-    weight: 'Доля',
-    amount: 'Сумма',
-    sector: 'Сектор',
-    addToWatchlist: 'В Watchlist',
-    maxDrawdown: 'Макс. просадка',
-    rebalancing: 'Ребалансировка',
-    rebalancingQuarterly: 'Ежеквартально',
-    rebalancingSemiAnnual: 'Раз в полгода',
-    shares: 'Кол-во',
-    priceLabel: 'Цена',
-    name: 'Название',
-    assetClass: 'Класс актива',
-    portfolioAnalysis: 'Анализ портфеля',
-    errorModeUnavailable: 'Этот режим недоступен на вашем тарифе.',
-    errorLimitReached: 'Лимит анализов исчерпан. Обновите тариф для продолжения.',
+    disclaimer:
+        'Данный анализ носит информационный характер и не является инвестиционной рекомендацией. Перед принятием инвестиционных решений проконсультируйтесь с финансовым советником.',
+    tradingDemoButton: 'Попробовать с демо-данными',
+    tradingOrDivider: 'или',
+    tradingAlreadyClient: 'Уже клиент Investlink?',
+    tradingSignIn: 'Войти',
+    tradingNoAccount: 'Нет аккаунта?',
+    tradingOpenAccount: 'Открыть счёт в Investlink',
+    tradingCtaTitle: 'Торгуйте акциями США с Investlink',
+    tradingCtaSubtitle: 'Комиссия от \$0 · Доступ к 5000+ акций · AI аналитика',
+    tradingCtaButton: 'Открыть счёт бесплатно',
+    tradingDemoLabel: 'DEMO',
+    investlinkUrl: 'https://investlink.kz/',
+    leadTitle: 'Получите AI-анализ',
+    leadSubtitle: 'Заполните форму и получите профессиональный отчёт за 30 секунд',
+    leadFirstName: 'Имя',
+    leadLastName: 'Фамилия',
+    leadEmail: 'Email',
+    leadWhatsapp: 'WhatsApp',
+    leadSubmit: 'Получить анализ',
+    leadPrivacy: 'Ваши данные защищены и не передаются третьим лицам',
+    leadFirstNameRequired: 'Введите имя',
+    leadEmailRequired: 'Введите email',
+    leadEmailInvalid: 'Некорректный email',
     errorServer: 'Ошибка сервера',
     errorNoConnection: 'Нет подключения к серверу',
     errorGeneric: 'Произошла ошибка',
@@ -526,7 +372,7 @@ class AppStrings {
   static const en = AppStrings._(
     heroTitle1: 'Stock Analysis',
     heroTitle2: 'powered by AI',
-    heroSubtitle: 'Choose a methodology to get started',
+    heroSubtitle: 'Enter a ticker and choose a methodology',
     heroRotatingItems: [
       HeroRotatingItem(line1: 'Stock Analysis', line2: 'by ILM'),
       HeroRotatingItem(line1: 'Technical Analysis', line2: 'by Citadel'),
@@ -591,14 +437,13 @@ class AppStrings {
       ),
     },
     enterTicker: 'Enter company ticker',
-    tickerHint: 'Enter ticker in English — e.g. AAPL, TSLA, GOOGL',
-    next: 'Next',
-    back: 'Back',
-    startAnalysis: 'Start analysis?',
+    tickerHint: 'e.g. AAPL, TSLA, GOOGL',
     analyze: 'Analyze',
     recentAnalyses: 'Recent analyses',
+    emptyHistory: 'Your first analysis will appear here',
     error: 'Error',
-    unlimited: 'Unlimited',
+    tabAiAnalysis: 'AI Analysis',
+    tabTradingAnalytics: 'Trading Analytics',
     howItWorks: 'How it works',
     howItWorksSubtitle: 'Three simple steps to professional analysis',
     howItWorksSteps: [
@@ -617,52 +462,6 @@ class AppStrings {
         description:
             'Detailed analysis with score, indicators, and recommendations',
       ),
-    ],
-    login: 'Sign In',
-    register: 'Sign Up',
-    emailHint: 'Email',
-    passwordHint: 'Password',
-    enterEmailAndPassword: 'Enter your email and password',
-    createAccount: 'Create an account',
-    loginButton: 'Sign In',
-    registerButton: 'Sign Up',
-    noAccount: 'Don\'t have an account?',
-    haveAccount: 'Already have an account?',
-    accountNotFound: 'Account not found',
-    wrongPassword: 'Wrong password',
-    emailTaken: 'Email already registered',
-    choosePlan: 'Choose a plan',
-    choosePlanSubtitle: 'Start for free, upgrade when you\'re ready',
-    currentPlan: 'Current plan',
-    select: 'Select',
-    popular: 'Popular',
-    comingSoon: 'Coming soon',
-    perMonth: '/mo',
-    analysesPerDay: 'analyses/day',
-    unlimitedLabel: 'Unlimited',
-    freePlanFeatures: [
-      PlanFeature(label: '3 analyses per day', included: true),
-      PlanFeature(label: '1 mode (Technical Analysis)', included: true),
-      PlanFeature(label: '1 day history', included: true),
-      PlanFeature(label: 'PDF export', included: false),
-      PlanFeature(label: 'Portfolio analysis', included: false),
-      PlanFeature(label: 'Priority response', included: false),
-    ],
-    proPlanFeatures: [
-      PlanFeature(label: '30 analyses per day', included: true),
-      PlanFeature(label: 'All 9 modes', included: true),
-      PlanFeature(label: '30 days history', included: true),
-      PlanFeature(label: 'PDF export', included: true),
-      PlanFeature(label: 'Portfolio analysis', included: false),
-      PlanFeature(label: 'Priority response', included: false),
-    ],
-    premiumPlanFeatures: [
-      PlanFeature(label: 'Unlimited analyses', included: true),
-      PlanFeature(label: 'All 9 modes', included: true),
-      PlanFeature(label: 'Full history', included: true),
-      PlanFeature(label: 'PDF export', included: true),
-      PlanFeature(label: 'Portfolio analysis', included: true),
-      PlanFeature(label: 'Priority response', included: true),
     ],
     overview: 'Overview',
     quickVerdict: 'Quick verdict',
@@ -693,40 +492,30 @@ class AppStrings {
     signalSell: 'SELL',
     share: 'Share',
     copied: 'Copied!',
-    disclaimer: 'This analysis is for informational purposes only and does not constitute investment advice. Consult a financial advisor before making investment decisions.',
-    buildPortfolio: 'Build Portfolio',
-    buildPortfolioSubtitle: 'AI will build an optimal portfolio for your amount and strategy',
-    enterAmount: 'Investment Amount',
-    amountHint: 'e.g., 10000',
-    chooseStrategy: 'Choose Strategy',
-    strategyConservative: 'Conservative',
-    strategyConservativeDesc: 'Low risk, stable income. Bonds and defensive assets.',
-    strategyModerate: 'Moderate',
-    strategyModerateDesc: 'Balanced growth and protection. Stocks + bonds + alternatives.',
-    strategyAggressive: 'Aggressive',
-    strategyAggressiveDesc: 'Maximum growth. Tech, crypto, emerging markets.',
-    buildingPortfolio: 'Building portfolio...',
-    yourPortfolio: 'Your Portfolio',
-    expectedReturn: 'Expected Return',
-    annualRisk: 'Annual Risk',
-    sharpeRatio: 'Sharpe Ratio',
-    allocation: 'Allocation',
-    ticker: 'Ticker',
-    weight: 'Weight',
-    amount: 'Amount',
-    sector: 'Sector',
-    addToWatchlist: 'Add to Watchlist',
-    maxDrawdown: 'Max Drawdown',
-    rebalancing: 'Rebalancing',
-    rebalancingQuarterly: 'Quarterly',
-    rebalancingSemiAnnual: 'Semi-annual',
-    shares: 'Shares',
-    priceLabel: 'Price',
-    name: 'Name',
-    assetClass: 'Asset Class',
-    portfolioAnalysis: 'Portfolio Analysis',
-    errorModeUnavailable: 'This mode is not available on your plan.',
-    errorLimitReached: 'Analysis limit reached. Upgrade your plan to continue.',
+    disclaimer:
+        'This analysis is for informational purposes only and does not constitute investment advice. Consult a financial advisor before making investment decisions.',
+    tradingDemoButton: 'Try with demo data',
+    tradingOrDivider: 'or',
+    tradingAlreadyClient: 'Already an Investlink client?',
+    tradingSignIn: 'Sign In',
+    tradingNoAccount: 'No account yet?',
+    tradingOpenAccount: 'Open Investlink Account',
+    tradingCtaTitle: 'Trade US stocks with Investlink',
+    tradingCtaSubtitle: 'Commission from \$0 · Access to 5000+ stocks · AI analytics',
+    tradingCtaButton: 'Open Account for Free',
+    tradingDemoLabel: 'DEMO',
+    investlinkUrl: 'https://investlink.io/',
+    leadTitle: 'Get AI Analysis',
+    leadSubtitle: 'Fill in the form and get a professional report in 30 seconds',
+    leadFirstName: 'First name',
+    leadLastName: 'Last name',
+    leadEmail: 'Email',
+    leadWhatsapp: 'WhatsApp',
+    leadSubmit: 'Get Analysis',
+    leadPrivacy: 'Your data is secure and never shared with third parties',
+    leadFirstNameRequired: 'Enter your name',
+    leadEmailRequired: 'Enter your email',
+    leadEmailInvalid: 'Invalid email',
     errorServer: 'Server error',
     errorNoConnection: 'No server connection',
     errorGeneric: 'An error occurred',
