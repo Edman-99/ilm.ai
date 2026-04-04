@@ -1,7 +1,7 @@
-import 'dart:convert';
 import 'dart:math' as math;
 // ignore: avoid_web_libraries_in_flutter
 import 'dart:html' as html;
+import 'package:excel/excel.dart' as xl;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -10,7 +10,6 @@ import 'package:intl/intl.dart';
 import 'package:ai_stock_analyzer/data/ai/ai_cubit.dart';
 import 'package:ai_stock_analyzer/data/analytics_service.dart';
 import 'package:ai_stock_analyzer/data/lead_service.dart';
-import 'package:ai_stock_analyzer/l10n/app_strings.dart';
 import 'package:ai_stock_analyzer/data/trading/strategy_entity.dart';
 import 'package:ai_stock_analyzer/data/trading/trading_analytics_cubit.dart';
 import 'package:ai_stock_analyzer/data/trading/trading_analytics_entity.dart';
@@ -72,8 +71,10 @@ class _TradingAnalyticsPageState extends State<TradingAnalyticsPage> {
               body = _OrdersPage(c: c, state: state);
             case TradingPage.ai:
               body = _AiPage(c: c, state: state);
+            case TradingPage.journal:
+              body = _JournalPage(c: c, state: state);
             case TradingPage.dashboard:
-              body = _Grid(a: state.analytics!, c: c, wide: wide);
+              body = _Grid(a: state.analytics!, c: c, wide: wide, orders: state.allOrders);
           }
           return Row(children: [
             if (wide) _Sidebar(c: c, email: state.savedEmail, activePage: state.activePage),
@@ -111,17 +112,18 @@ class _Sidebar extends StatelessWidget {
         const SizedBox(height: 20),
         if (email != null) Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: Align(alignment: Alignment.centerLeft, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(email!.split('@').first.toUpperCase(), style: TextStyle(color: c.green, fontSize: 11, fontWeight: FontWeight.w700)),
-          Text('STAGING', style: TextStyle(color: c.textSecondary, fontSize: 9, letterSpacing: 0.5)),
+          Text(_T.of(context).navStaging, style: TextStyle(color: c.textSecondary, fontSize: 9, letterSpacing: 0.5)),
         ]))),
         const SizedBox(height: 24),
-        _navBtn(Icons.dashboard_rounded, 'DASHBOARD', TradingPage.dashboard, cubit),
-        _navBtn(Icons.account_balance_wallet_outlined, 'PORTFOLIO', TradingPage.portfolio, cubit),
-        _navBtn(Icons.pie_chart_rounded, 'STRATEGIES', TradingPage.strategies, cubit),
-        _navBtn(Icons.receipt_long_rounded, 'ORDERS', TradingPage.orders, cubit),
-        _navBtn(Icons.auto_awesome_rounded, 'AI INSIGHTS', TradingPage.ai, cubit),
+        _navBtn(Icons.dashboard_rounded, _T.of(context).navDashboard, TradingPage.dashboard, cubit),
+        _navBtn(Icons.account_balance_wallet_outlined, _T.of(context).navPortfolio, TradingPage.portfolio, cubit),
+        _navBtn(Icons.pie_chart_rounded, _T.of(context).navStrategies, TradingPage.strategies, cubit),
+        _navBtn(Icons.receipt_long_rounded, _T.of(context).navOrders, TradingPage.orders, cubit),
+        _navBtn(Icons.auto_awesome_rounded, _T.of(context).navAiInsights, TradingPage.ai, cubit),
+        _navBtn(Icons.menu_book_rounded, _T.of(context).navJournal, TradingPage.journal, cubit),
         const Spacer(),
         Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16), child:
-          GestureDetector(onTap: () => cubit.logout(), child: _nav(Icons.logout_rounded, 'LOGOUT', false, c)),
+          GestureDetector(onTap: () => cubit.logout(), child: _nav(Icons.logout_rounded, _T.of(context).navLogout, false, c)),
         ),
       ]),
     );
@@ -168,10 +170,10 @@ class _Header extends StatelessWidget {
           ));
         })
       else
-        Text(
-          switch (activePage) { TradingPage.portfolio => 'PORTFOLIO', TradingPage.strategies => 'STRATEGIES', TradingPage.orders => 'ORDER HISTORY', TradingPage.ai => 'AI INSIGHTS', _ => '' },
+        Builder(builder: (ctx) { final t = _T.of(ctx); return Text(
+          switch (activePage) { TradingPage.portfolio => t.headerPortfolio, TradingPage.strategies => t.headerStrategies, TradingPage.orders => t.headerOrderHistory, TradingPage.ai => t.headerAiInsights, TradingPage.journal => t.headerJournal, _ => '' },
           style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.w700, letterSpacing: 1),
-        ),
+        ); }),
       const Spacer(),
       if (isDemo) Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -207,9 +209,9 @@ class _StatusBar extends StatelessWidget {
       const Spacer(),
       Container(width: 6, height: 6, decoration: BoxDecoration(color: c.green, shape: BoxShape.circle)),
       const SizedBox(width: 6),
-      Text('LIVE MARKET CONNECTED', style: TextStyle(color: c.textSecondary, fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+      Builder(builder: (ctx) => Text(_T.of(ctx).statusLive, style: TextStyle(color: c.textSecondary, fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 0.5))),
       const SizedBox(width: 16),
-      Text('$trades trades', style: TextStyle(color: c.textSecondary, fontSize: 9)),
+      Builder(builder: (ctx) => Text('$trades ${_T.of(ctx).trades}', style: TextStyle(color: c.textSecondary, fontSize: 9))),
     ]),
   );
 }
@@ -219,27 +221,23 @@ class _StatusBar extends StatelessWidget {
 // =============================================================================
 
 class _Grid extends StatelessWidget {
-  const _Grid({required this.a, required this.c, required this.wide});
+  const _Grid({required this.a, required this.c, required this.wide, required this.orders});
   final TradingAnalyticsEntity a; final AppColors c; final bool wide;
+  final List<TradingOrderDto> orders;
 
   @override
   Widget build(BuildContext context) {
     if (!wide) return _mobile();
     const g = 12.0;
     return ListView(padding: const EdgeInsets.all(20), children: [
-      // Row 1: Key Metrics (2/3) + Equity Curve (1/3)
       SizedBox(height: 240, child: _row(g, [_f(2, _Metrics(a: a, c: c)), _f(1, _EquityCurve(a: a, c: c))])),
       SizedBox(height: g),
-      // Row 2: Win Rate + Streaks + Top Tickers
       SizedBox(height: 260, child: _row(g, [_f(1, _WinRate(a: a, c: c)), _f(1, _Streaks(a: a, c: c)), _f(1, _TopTickers(a: a, c: c))])),
       SizedBox(height: g),
-      // Row 3: Long vs Short + Weekday + Hourly
       SizedBox(height: 220, child: _row(g, [_f(1, _SideAnalysis(a: a, c: c)), _f(1, _WeekdayChart(a: a, c: c)), _f(1, _HourlyHeatmap(a: a, c: c))])),
       SizedBox(height: g),
-      // Row 4: Calendar + Monthly + Hold Time
-      SizedBox(height: 320, child: _row(g, [_f(1, _Calendar(a: a, c: c)), _f(1, _MonthlyTable(a: a, c: c)), _f(1, _HoldTime(a: a, c: c))])),
+      SizedBox(height: 320, child: _row(g, [_f(1, _Calendar(a: a, c: c, orders: orders)), _f(1, _MonthlyTable(a: a, c: c)), _f(1, _HoldTime(a: a, c: c))])),
       SizedBox(height: g),
-      // Row 5: Position Size + R/R Distribution
       SizedBox(height: 260, child: _row(g, [_f(1, _TradeSize(a: a, c: c)), _f(1, _RrDist(a: a, c: c))])),
       const SizedBox(height: 32),
     ]);
@@ -254,7 +252,7 @@ class _Grid extends StatelessWidget {
     _card(_SideAnalysis(a: a, c: c)), const SizedBox(height: 12),
     _card(_WeekdayChart(a: a, c: c)), const SizedBox(height: 12),
     _card(_HourlyHeatmap(a: a, c: c)), const SizedBox(height: 12),
-    _card(_Calendar(a: a, c: c)), const SizedBox(height: 12),
+    _card(_Calendar(a: a, c: c, orders: orders)), const SizedBox(height: 12),
     _card(_MonthlyTable(a: a, c: c)), const SizedBox(height: 12),
     _card(_HoldTime(a: a, c: c)), const SizedBox(height: 12),
     _card(_TradeSize(a: a, c: c)), const SizedBox(height: 12),
@@ -274,13 +272,31 @@ class _Grid extends StatelessWidget {
 // KEY METRICS
 // =============================================================================
 
-class _Metrics extends StatelessWidget {
+class _Metrics extends StatefulWidget {
   const _Metrics({required this.a, required this.c});
   final TradingAnalyticsEntity a; final AppColors c;
   @override
+  State<_Metrics> createState() => _MetricsState();
+}
+
+class _MetricsState extends State<_Metrics> {
+  bool _plInPct = false;
+
+  @override
   Widget build(BuildContext context) {
+    final a = widget.a; final c = widget.c;
+    // Cost basis approximation: totalPl / (profitFactor-like ratio) — use avgPl as reference.
+    // P/L % = totalPl / (totalPl - totalPl + avgWin*winCount) ≈ show as avg P/L per trade %.
+    // Best available: totalPl relative to total commissions+losses as cost.
+    final totalLoss = a.averageLoss * a.lossCount;
+    final totalInvested = totalLoss + (a.averageWin * a.winCount);
+    final plPct = totalInvested > 0 ? (a.totalPl / totalInvested * 100) : 0.0;
+    final plLabel = _plInPct
+        ? '${a.totalPl >= 0 ? '+' : ''}${plPct.toStringAsFixed(1)}%'
+        : _fmtD(a.totalPl);
+
     final row1 = [
-      ('TOTAL P/L', _fmtD(a.totalPl), _plC(a.totalPl, c)),
+      ('TOTAL P/L', plLabel, _plC(a.totalPl, c)),
       ('WIN RATE %', '${a.winRate.toStringAsFixed(1)}%', a.winRate >= 50 ? c.green : c.red),
       ('PROFIT FACTOR', a.profitFactor.toStringAsFixed(2), c.textPrimary),
       ('TOTAL TRADES', '${a.totalTrades}', c.textPrimary),
@@ -292,21 +308,35 @@ class _Metrics extends StatelessWidget {
       ('COMMISSION', '-\$${a.totalCommission.toStringAsFixed(2)}', c.textSecondary),
     ];
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      // Header row.
       Row(children: [
-        Text('KEY METRICS', style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1)),
+        Text(_T.of(context).keyMetrics, style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1)),
         const Spacer(),
-        Icon(Icons.grid_view_rounded, size: 16, color: c.textSecondary.withOpacity(0.4)),
+        GestureDetector(
+          onTap: () => setState(() => _plInPct = !_plInPct),
+          child: Container(
+            decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(6)),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              _tab('\$', !_plInPct, c),
+              _tab('%', _plInPct, c),
+            ]),
+          ),
+        ),
       ]),
       const SizedBox(height: 20),
-      // Row 1.
-      _metricRow(row1),
+      _metricRow(row1, c),
       Divider(color: c.border, height: 24),
-      // Row 2.
-      _metricRow(row2),
+      _metricRow(row2, c),
     ]);
   }
-  Widget _metricRow(List<(String, String, Color)> items) {
+
+  Widget _tab(String label, bool active, AppColors c) => AnimatedContainer(
+    duration: const Duration(milliseconds: 150),
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    decoration: BoxDecoration(color: active ? c.textPrimary : Colors.transparent, borderRadius: BorderRadius.circular(5)),
+    child: Text(label, style: TextStyle(color: active ? c.bg : c.textSecondary, fontSize: 10, fontWeight: FontWeight.w700)),
+  );
+
+  Widget _metricRow(List<(String, String, Color)> items, AppColors c) {
     return Row(children: items.expand((m) sync* {
       if (m != items.first) yield Container(width: 1, height: 48, color: c.border, margin: const EdgeInsets.symmetric(horizontal: 12));
       yield Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -326,28 +356,73 @@ class _Metrics extends StatelessWidget {
 // EQUITY CURVE
 // =============================================================================
 
-class _EquityCurve extends StatelessWidget {
+class _EquityCurve extends StatefulWidget {
   const _EquityCurve({required this.a, required this.c});
   final TradingAnalyticsEntity a; final AppColors c;
   @override
+  State<_EquityCurve> createState() => _EquityCurveState();
+}
+
+class _EquityCurveState extends State<_EquityCurve> {
+  bool _showPct = false;
+
+  List<CumulativePlPoint> _pctPts(List<CumulativePlPoint> raw) {
+    if (raw.isEmpty) return raw;
+    // Find first non-zero as base; fallback to raw[0].value
+    double base = 0;
+    for (final p in raw) { if (p.value != 0) { base = p.value; break; } }
+    if (base == 0) return raw;
+    return raw.map((p) => CumulativePlPoint(date: p.date, value: ((p.value - base) / base.abs()) * 100)).toList();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final a = widget.a; final c = widget.c;
     if (a.cumulativePl.length < 2) return const SizedBox.shrink();
-    final last = a.cumulativePl.last.value; final lc = last >= 0 ? c.green : c.red;
-    final pts = _ds(a.cumulativePl, 150);
+    final sourcePts = _showPct ? _pctPts(a.cumulativePl) : a.cumulativePl;
+    final last = sourcePts.last.value; final lc = last >= 0 ? c.green : c.red;
+    final pts = _ds(sourcePts, 150);
+    final valueLabel = _showPct ? '${last >= 0 ? '+' : ''}${last.toStringAsFixed(2)}%' : _fmtD(last);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('EQUITY CURVE', style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1)),
+        Text(_T.of(context).equityCurve, style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1)),
         const Spacer(),
+        // Toggle $ / %
+        GestureDetector(
+          onTap: () => setState(() => _showPct = !_showPct),
+          child: Container(
+            decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(6)),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              _toggleBtn('\$', !_showPct, c),
+              _toggleBtn('%', _showPct, c),
+            ]),
+          ),
+        ),
+        const SizedBox(width: 12),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text('CURRENT VALUE', style: TextStyle(color: c.textSecondary, fontSize: 8, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+          Text(_T.of(context).currentValue, style: TextStyle(color: c.textSecondary, fontSize: 8, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
           const SizedBox(height: 2),
-          Text(_fmtD(last), style: TextStyle(color: lc, fontSize: 24, fontWeight: FontWeight.w800)),
+          Text(valueLabel, style: TextStyle(color: lc, fontSize: 24, fontWeight: FontWeight.w800)),
         ]),
       ]),
       const Spacer(),
       RepaintBoundary(child: SizedBox(height: 100, width: double.infinity, child: CustomPaint(painter: _EqP(pts: pts, lc: lc, fc: lc.withOpacity(0.1), gc: c.border)))),
     ]);
   }
+
+  Widget _toggleBtn(String label, bool active, AppColors c) => AnimatedContainer(
+    duration: const Duration(milliseconds: 150),
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    decoration: BoxDecoration(
+      color: active ? c.textPrimary : Colors.transparent,
+      borderRadius: BorderRadius.circular(5),
+    ),
+    child: Text(label, style: TextStyle(
+      color: active ? c.bg : c.textSecondary,
+      fontSize: 10,
+      fontWeight: FontWeight.w700,
+    )),
+  );
 }
 
 class _EqP extends CustomPainter {
@@ -376,16 +451,16 @@ class _WinRate extends StatelessWidget {
   final TradingAnalyticsEntity a; final AppColors c;
   @override
   Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    Text('WIN RATE', style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1)),
+    Text(_T.of(context).winRate, style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1)),
     const Spacer(),
     Center(child: SizedBox(width: 130, height: 130, child: Stack(alignment: Alignment.center, children: [
       SizedBox.expand(child: CircularProgressIndicator(value: a.winRate / 100, strokeWidth: 10, backgroundColor: c.border, color: c.green)),
       Text('${a.winRate.toStringAsFixed(0)}%', style: TextStyle(color: c.textPrimary, fontSize: 28, fontWeight: FontWeight.w800)),
     ]))),
     const Spacer(),
-    Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-      _leg(c.green, '${a.winCount} WINS'), const SizedBox(width: 20), _leg(c.red, '${a.lossCount} LOSSES'),
-    ]),
+    Builder(builder: (ctx) { final t = _T.of(ctx); return Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+      _leg(c.green, '${a.winCount} ${t.wins}'), const SizedBox(width: 20), _leg(c.red, '${a.lossCount} ${t.losses}'),
+    ]); }),
   ]);
   Widget _leg(Color cl, String t) => Row(children: [
     Container(width: 20, height: 3, decoration: BoxDecoration(color: cl, borderRadius: BorderRadius.circular(2))),
@@ -403,16 +478,18 @@ class _Streaks extends StatelessWidget {
   final TradingAnalyticsEntity a; final AppColors c;
   @override
   Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    Text('STREAKS', style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1)),
+    Text(_T.of(context).streaks, style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1)),
     const SizedBox(height: 16),
-    Row(children: [
-      Expanded(child: _box('WIN STREAK', '${a.maxWinStreak}', c.green, Icons.trending_up)),
+    Builder(builder: (ctx) { final t = _T.of(ctx); return Row(children: [
+      Expanded(child: _box(t.winStreak, '${a.maxWinStreak}', c.green, Icons.trending_up)),
       const SizedBox(width: 10),
-      Expanded(child: _box('LOSS STREAK', '${a.maxLossStreak}', c.red, Icons.trending_down)),
-    ]),
+      Expanded(child: _box(t.lossStreak, '${a.maxLossStreak}', c.red, Icons.trending_down)),
+    ]); }),
     const Spacer(),
-    if (a.bestDay != null) _day('BEST DAY: ${DateFormat('MMM dd').format(a.bestDay!.date).toUpperCase()}', a.bestDay!, c.green),
-    if (a.worstDay != null) _day('WORST DAY: ${DateFormat('MMM dd').format(a.worstDay!.date).toUpperCase()}', a.worstDay!, c.red),
+    Builder(builder: (ctx) { final t = _T.of(ctx); return Column(children: [
+      if (a.bestDay != null) _day('${t.bestDay}: ${DateFormat('MMM dd').format(a.bestDay!.date).toUpperCase()}', a.bestDay!, c.green),
+      if (a.worstDay != null) _day('${t.worstDay}: ${DateFormat('MMM dd').format(a.worstDay!.date).toUpperCase()}', a.worstDay!, c.red),
+    ]); }),
   ]);
   Widget _box(String l, String v, Color cl, IconData ic) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -438,37 +515,73 @@ class _Streaks extends StatelessWidget {
 // TOP TICKERS
 // =============================================================================
 
-class _TopTickers extends StatelessWidget {
+class _TopTickers extends StatefulWidget {
   const _TopTickers({required this.a, required this.c});
   final TradingAnalyticsEntity a; final AppColors c;
   @override
+  State<_TopTickers> createState() => _TopTickersState();
+}
+
+class _TopTickersState extends State<_TopTickers> {
+  bool _showPct = false;
+
+  @override
   Widget build(BuildContext context) {
-    final sorted = a.tickerPl.entries.toList()..sort((a, b) => b.value.totalPl.compareTo(a.value.totalPl));
+    final a = widget.a; final c = widget.c;
+    final sorted = a.tickerPl.entries.toList()..sort((x, y) => y.value.totalPl.compareTo(x.value.totalPl));
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('TOP TICKERS', style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1)),
+      Row(children: [
+        Text(_T.of(context).topTickers, style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1)),
+        const Spacer(),
+        GestureDetector(
+          onTap: () => setState(() => _showPct = !_showPct),
+          child: Container(
+            decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(6)),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              _tab('\$', !_showPct, c),
+              _tab('%', _showPct, c),
+            ]),
+          ),
+        ),
+      ]),
       const SizedBox(height: 14),
       Expanded(child: ListView.separated(
         itemCount: sorted.length,
         separatorBuilder: (_, __) => Divider(color: c.border, height: 16),
         itemBuilder: (_, i) {
-          final e = sorted[i]; final cl = e.value.totalPl >= 0 ? c.green : c.red; final sign = e.value.totalPl >= 0 ? '+' : '';
+          final e = sorted[i];
+          final stats = e.value;
+          final value = _showPct ? (stats.tradeCount > 0 ? stats.totalPl / stats.tradeCount : 0.0) : stats.totalPl;
+          final cl = value >= 0 ? c.green : c.red;
+          final sign = value >= 0 ? '+' : '';
+          final label = _showPct ? '$sign\$${_fmt(value)}${_T.of(context).perTrade}' : '$sign\$${_fmt(value)}';
           return Row(children: [
             Container(width: 36, height: 36, decoration: BoxDecoration(color: c.border.withOpacity(0.4), borderRadius: BorderRadius.circular(8)),
               child: Center(child: Text(e.key.length > 4 ? e.key.substring(0, 4) : e.key, style: TextStyle(color: c.textPrimary, fontSize: 10, fontWeight: FontWeight.w700)))),
             const SizedBox(width: 12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(e.key, style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
-              Text('${e.value.tradeCount} TRADES', style: TextStyle(color: c.textSecondary, fontSize: 9, letterSpacing: 0.3)),
+              Text('${stats.tradeCount} ${_T.of(context).trades.toUpperCase()}', style: TextStyle(color: c.textSecondary, fontSize: 9, letterSpacing: 0.3)),
             ])),
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Text('$sign\$${_fmt(e.value.totalPl)}', style: TextStyle(color: cl, fontSize: 13, fontWeight: FontWeight.w700)),
-              Text('${e.value.winRate.toStringAsFixed(0)}% WIN', style: TextStyle(color: c.green, fontSize: 10)),
+              Text(label, style: TextStyle(color: cl, fontSize: 13, fontWeight: FontWeight.w700)),
+              Text('${stats.winRate.toStringAsFixed(0)}% ${_T.of(context).wins}', style: TextStyle(color: c.green, fontSize: 10)),
             ]),
           ]);
         },
       )),
     ]);
   }
+
+  Widget _tab(String label, bool active, AppColors c) => AnimatedContainer(
+    duration: const Duration(milliseconds: 150),
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    decoration: BoxDecoration(
+      color: active ? c.textPrimary : Colors.transparent,
+      borderRadius: BorderRadius.circular(5),
+    ),
+    child: Text(label, style: TextStyle(color: active ? c.bg : c.textSecondary, fontSize: 10, fontWeight: FontWeight.w700)),
+  );
 }
 
 // =============================================================================
@@ -483,15 +596,18 @@ class _SideAnalysis extends StatelessWidget {
     if (a.sidePl.isEmpty) return const SizedBox.shrink();
     final total = a.sidePl.values.fold<int>(0, (s, v) => s + v.tradeCount);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('LONG VS SHORT', style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1)),
+      Text(_T.of(context).longVsShort, style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1)),
       const Spacer(),
       ...a.sidePl.entries.map((e) { final isL = e.key == 'Long'; final cl = isL ? c.green : c.red; final s = e.value; final pct = total > 0 ? (s.tradeCount / total * 100).toStringAsFixed(0) : '0'; final sign = s.totalPl >= 0 ? '+' : '';
         return Padding(padding: const EdgeInsets.only(bottom: 16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Icon(isL ? Icons.trending_up : Icons.trending_down, color: cl, size: 16), const SizedBox(width: 8),
-            Text('${e.key.toUpperCase()} POSITIONS', style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.w700)),
+            Text('${e.key.toUpperCase()} ${_T.of(context).positions}', style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.w700)),
             const Spacer(),
-            Text('$sign\$${_fmt(s.totalPl)} ($pct%)', style: TextStyle(color: cl, fontSize: 13, fontWeight: FontWeight.w700)),
+            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Text('$sign\$${_fmt(s.totalPl)} ($pct%)', style: TextStyle(color: cl, fontSize: 13, fontWeight: FontWeight.w700)),
+              Builder(builder: (ctx) { final avgSign = s.averagePl >= 0 ? '+' : ''; final t = _T.of(ctx); return Text('${t.avg} $avgSign\$${_fmt(s.averagePl)}${t.perTrade}', style: TextStyle(color: cl.withValues(alpha: 0.7), fontSize: 10)); }),
+            ]),
           ]),
           const SizedBox(height: 8),
           ClipRRect(borderRadius: BorderRadius.circular(3), child: LinearProgressIndicator(value: total > 0 ? s.tradeCount / total : 0, minHeight: 6, backgroundColor: c.border, color: cl)),
@@ -505,21 +621,51 @@ class _SideAnalysis extends StatelessWidget {
 // WEEKDAY
 // =============================================================================
 
-class _WeekdayChart extends StatelessWidget {
+class _WeekdayChart extends StatefulWidget {
   const _WeekdayChart({required this.a, required this.c});
   final TradingAnalyticsEntity a; final AppColors c;
+  @override
+  State<_WeekdayChart> createState() => _WeekdayChartState();
+}
+
+class _WeekdayChartState extends State<_WeekdayChart> {
+  bool _showPct = false;
   static const _l = {1:'MON',2:'TUE',3:'WED',4:'THU',5:'FRI'};
+
+  Widget _tab(String label, bool active, AppColors c) => AnimatedContainer(
+    duration: const Duration(milliseconds: 150),
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    decoration: BoxDecoration(color: active ? c.textPrimary : Colors.transparent, borderRadius: BorderRadius.circular(5)),
+    child: Text(label, style: TextStyle(color: active ? c.bg : c.textSecondary, fontSize: 10, fontWeight: FontWeight.w700)),
+  );
+
   @override
   Widget build(BuildContext context) {
+    final a = widget.a; final c = widget.c;
     final wd = a.weekdayPl; if (wd.isEmpty) return const SizedBox.shrink();
-    final maxA = wd.values.map((s) => s.totalPl.abs()).fold<double>(0, math.max);
+    final maxA = wd.values.map((s) => (_showPct ? s.averagePl.abs() : s.totalPl.abs())).fold<double>(0, math.max);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('P/L BY WEEKDAY', style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1)),
+      Row(children: [
+        Text(_T.of(context).plByWeekday, style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1)),
+        const Spacer(),
+        GestureDetector(
+          onTap: () => setState(() => _showPct = !_showPct),
+          child: Container(
+            decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(6)),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              _tab('\$', !_showPct, c),
+              _tab('%', _showPct, c),
+            ]),
+          ),
+        ),
+      ]),
       const Spacer(),
       SizedBox(height: 140, child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: _l.entries.map((e) {
-        final s = wd[e.key]; final pl = s?.totalPl ?? 0; final ratio = maxA > 0 ? (pl.abs() / maxA).clamp(0.08, 1.0) : 0.08; final cl = pl >= 0 ? c.green : c.red;
+        final s = wd[e.key];
+        final pl = _showPct ? (s?.averagePl ?? 0) : (s?.totalPl ?? 0);
+        final ratio = maxA > 0 ? (pl.abs() / maxA).clamp(0.08, 1.0) : 0.08; final cl = pl >= 0 ? c.green : c.red;
         return Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 6), child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
-          Text(_fmtK(pl), style: TextStyle(color: cl, fontSize: 11, fontWeight: FontWeight.w700)),
+          Builder(builder: (ctx) { final label = _showPct ? '${_fmtK(pl)}${_T.of(ctx).perTrade}' : _fmtK(pl); return Text(label, style: TextStyle(color: cl, fontSize: 11, fontWeight: FontWeight.w700)); }),
           const SizedBox(height: 5),
           Container(height: 95 * ratio, decoration: BoxDecoration(color: cl.withOpacity(0.25), borderRadius: BorderRadius.circular(5))),
           const SizedBox(height: 8),
@@ -543,7 +689,7 @@ class _HourlyHeatmap extends StatelessWidget {
     final maxA = h.values.map((v) => v.abs()).fold<double>(0, math.max);
     final hours = h.keys.toList()..sort();
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('P/L BY HOUR (MARKET)', style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1)),
+      Text(_T.of(context).plByHour, style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1)),
       const SizedBox(height: 14),
       Expanded(child: Wrap(spacing: 6, runSpacing: 6, children: hours.map((hr) {
         final pl = h[hr] ?? 0; final intensity = maxA > 0 ? (pl.abs() / maxA).clamp(0.1, 1.0) : 0.1; final bc = pl >= 0 ? c.green : c.red;
@@ -554,7 +700,7 @@ class _HourlyHeatmap extends StatelessWidget {
           ]));
       }).toList())),
       const SizedBox(height: 6),
-      Text('AFTER-HOURS DATA RESTRICTED', style: TextStyle(color: c.textSecondary.withOpacity(0.4), fontSize: 8, fontWeight: FontWeight.w500, letterSpacing: 0.5)),
+      Builder(builder: (ctx) => Text(_T.of(ctx).afterHoursRestricted, style: TextStyle(color: c.textSecondary.withOpacity(0.4), fontSize: 8, fontWeight: FontWeight.w500, letterSpacing: 0.5))),
     ]);
   }
 }
@@ -564,26 +710,64 @@ class _HourlyHeatmap extends StatelessWidget {
 // =============================================================================
 
 class _Calendar extends StatefulWidget {
-  const _Calendar({required this.a, required this.c});
+  const _Calendar({required this.a, required this.c, required this.orders});
   final TradingAnalyticsEntity a; final AppColors c;
+  final List<TradingOrderDto> orders;
   @override State<_Calendar> createState() => _CalendarS();
 }
+
 class _CalendarS extends State<_Calendar> {
   late DateTime _m;
-  @override void initState() { super.initState(); final cal = widget.a.calendarPl;
-    _m = cal.isNotEmpty ? (() { final l = cal.keys.reduce((a, b) => a.isAfter(b) ? a : b); return DateTime(l.year, l.month); })() : DateTime(DateTime.now().year, DateTime.now().month); }
-  @override void didUpdateWidget(covariant _Calendar o) { super.didUpdateWidget(o); if (widget.a.calendarPl.isNotEmpty && widget.a.calendarPl != o.a.calendarPl) { final l = widget.a.calendarPl.keys.reduce((a, b) => a.isAfter(b) ? a : b); final nm = DateTime(l.year, l.month); if (_m.year != nm.year || _m.month != nm.month) setState(() => _m = nm); } }
-  @override Widget build(BuildContext context) {
+  DateTime? _selectedDay;
+
+  @override
+  void initState() {
+    super.initState();
+    final cal = widget.a.calendarPl;
+    _m = cal.isNotEmpty
+        ? (() { final l = cal.keys.reduce((a, b) => a.isAfter(b) ? a : b); return DateTime(l.year, l.month); })()
+        : DateTime(DateTime.now().year, DateTime.now().month);
+  }
+
+  @override
+  void didUpdateWidget(covariant _Calendar o) {
+    super.didUpdateWidget(o);
+    if (widget.a.calendarPl.isNotEmpty && widget.a.calendarPl != o.a.calendarPl) {
+      final l = widget.a.calendarPl.keys.reduce((a, b) => a.isAfter(b) ? a : b);
+      final nm = DateTime(l.year, l.month);
+      if (_m.year != nm.year || _m.month != nm.month) setState(() => _m = nm);
+    }
+  }
+
+  List<TradingOrderDto> _ordersForDay(DateTime date) {
+    return widget.orders.where((o) {
+      final raw = o.filledAt.isNotEmpty ? o.filledAt : o.createdAt;
+      final dt = DateTime.tryParse(raw);
+      if (dt == null) return false;
+      return dt.year == date.year && dt.month == date.month && dt.day == date.day;
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final c = widget.c; final y = _m.year, mo = _m.month;
+
+    // If day selected — show drill-down
+    if (_selectedDay != null) {
+      final dayOrders = _ordersForDay(_selectedDay!);
+      return _DayDrillDown(
+        date: _selectedDay!,
+        orders: dayOrders,
+        pl: widget.a.calendarPl[DateTime.utc(_selectedDay!.year, _selectedDay!.month, _selectedDay!.day)],
+        c: c,
+        onBack: () => setState(() => _selectedDay = null),
+      );
+    }
+
     final days = DateUtils.getDaysInMonth(y, mo);
-    final firstWd = DateTime(y, mo).weekday; // 1=Mon..7=Sun
-    final offset = firstWd % 7; // Sun=0,Mon=1..Sat=6
-
-    // Previous month trailing days
+    final offset = DateTime(y, mo).weekday % 7;
     final prevDays = DateUtils.getDaysInMonth(mo == 1 ? y - 1 : y, mo == 1 ? 12 : mo - 1);
-
-    // Build cell data: (day, isCurrentMonth, pl?)
-    final cells = <(int day, bool current)>[];
+    final cells = <(int, bool)>[];
     for (var i = offset - 1; i >= 0; i--) cells.add((prevDays - i, false));
     for (var d = 1; d <= days; d++) cells.add((d, true));
     while (cells.length % 7 != 0) cells.add((cells.length - offset - days + 1, false));
@@ -599,42 +783,156 @@ class _CalendarS extends State<_Calendar> {
         GestureDetector(onTap: () => setState(() => _m = DateTime(y, mo + 1)), child: MouseRegion(cursor: SystemMouseCursors.click, child: Icon(Icons.chevron_right, size: 18, color: c.textSecondary))),
       ]),
       const SizedBox(height: 12),
-      Row(children: ['SU','MO','TU','WE','TH','FR','SA'].map((d) => Expanded(child: Center(child: Text(d, style: TextStyle(color: c.textSecondary.withOpacity(0.5), fontSize: 9, fontWeight: FontWeight.w600))))).toList()),
+      Row(children: ['SU','MO','TU','WE','TH','FR','SA'].map((d) => Expanded(child: Center(child: Text(d, style: TextStyle(color: c.textSecondary.withValues(alpha: 0.5), fontSize: 9, fontWeight: FontWeight.w600))))).toList()),
       const SizedBox(height: 6),
       Expanded(child: Column(children: weeks.map((week) => Expanded(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: week.map((cell) {
         final day = cell.$1; final cur = cell.$2;
         if (!cur) {
           return Expanded(child: Container(margin: const EdgeInsets.all(1),
             child: Align(alignment: Alignment.topCenter, child: Padding(padding: const EdgeInsets.only(top: 4),
-              child: Text('$day', style: TextStyle(color: c.textSecondary.withOpacity(0.2), fontSize: 10))))));
+              child: Text('$day', style: TextStyle(color: c.textSecondary.withValues(alpha: 0.2), fontSize: 10))))));
         }
-        final date = DateTime.utc(y, mo, day); final pl = widget.a.calendarPl[date];
+        final date = DateTime.utc(y, mo, day);
+        final pl = widget.a.calendarPl[date];
         final hasPl = pl != null;
+        final hasOrders = _ordersForDay(DateTime(y, mo, day)).isNotEmpty;
         Color? bg; Color? border;
         if (hasPl) {
-          bg = pl > 0 ? c.green.withOpacity(0.12) : c.red.withOpacity(0.12);
-          border = pl > 0 ? c.green.withOpacity(0.25) : c.red.withOpacity(0.25);
+          bg = pl > 0 ? c.green.withValues(alpha: 0.12) : c.red.withValues(alpha: 0.12);
+          border = pl > 0 ? c.green.withValues(alpha: 0.25) : c.red.withValues(alpha: 0.25);
         }
-        return Expanded(child: Container(
-          margin: const EdgeInsets.all(1),
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(6),
-            border: border != null ? Border.all(color: border, width: 0.5) : null,
+        return Expanded(child: GestureDetector(
+          onTap: hasOrders ? () => setState(() => _selectedDay = DateTime(y, mo, day)) : null,
+          child: MouseRegion(
+            cursor: hasOrders ? SystemMouseCursors.click : MouseCursor.defer,
+            child: Container(
+              margin: const EdgeInsets.all(1),
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: BorderRadius.circular(6),
+                border: border != null ? Border.all(color: border, width: 0.5) : null,
+              ),
+              child: Column(children: [
+                const SizedBox(height: 4),
+                Text('$day', style: TextStyle(color: hasPl ? c.textPrimary : c.textSecondary.withValues(alpha: 0.3), fontSize: hasPl ? 14 : 10, fontWeight: hasPl ? FontWeight.w700 : FontWeight.normal)),
+                if (hasPl) ...[
+                  const Spacer(),
+                  Text(_fmtK(pl), style: TextStyle(color: pl >= 0 ? c.green : c.red, fontSize: 9, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                ],
+              ]),
+            ),
           ),
-          child: Column(children: [
-            const SizedBox(height: 4),
-            Text('$day', style: TextStyle(color: hasPl ? c.textPrimary : c.textSecondary.withOpacity(0.3), fontSize: hasPl ? 14 : 10, fontWeight: hasPl ? FontWeight.w700 : FontWeight.normal)),
-            if (hasPl) ...[
-              const Spacer(),
-              Text(_fmtK(pl), style: TextStyle(color: pl >= 0 ? c.green : c.red, fontSize: 9, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 4),
-            ],
-          ]),
         ));
       }).toList()))).toList())),
     ]);
   }
+}
+
+// =============================================================================
+// DAY DRILL-DOWN
+// =============================================================================
+
+class _DayDrillDown extends StatelessWidget {
+  const _DayDrillDown({required this.date, required this.orders, required this.pl, required this.c, required this.onBack});
+  final DateTime date;
+  final List<TradingOrderDto> orders;
+  final double? pl;
+  final AppColors c;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    final totalPl = orders.fold<double>(0, (s, o) => s + (o.profitCash ?? 0));
+    final wins = orders.where((o) => (o.profitCash ?? 0) > 0).length;
+    final losses = orders.where((o) => (o.profitCash ?? 0) < 0).length;
+    final plC = totalPl >= 0 ? c.green : c.red;
+    final sign = totalPl >= 0 ? '+' : '';
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      // Header with back button
+      Row(children: [
+        GestureDetector(
+          onTap: onBack,
+          child: MouseRegion(cursor: SystemMouseCursors.click, child: Row(children: [
+            Icon(Icons.chevron_left, size: 16, color: c.textSecondary),
+            Text(_T.of(context).back, style: TextStyle(color: c.textSecondary, fontSize: 10, fontWeight: FontWeight.w600)),
+          ])),
+        ),
+        const SizedBox(width: 12),
+        Text(DateFormat('EEE, MMM d yyyy').format(date).toUpperCase(), style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+      ]),
+      const SizedBox(height: 12),
+      // Day summary strip
+      Row(children: [
+        _statChip('P/L', '$sign\$${_fmt(totalPl)}', plC),
+        const SizedBox(width: 8),
+        _statChip('TRADES', '${orders.length}', c.textPrimary),
+        const SizedBox(width: 8),
+        _statChip('WINS', '$wins', c.green),
+        const SizedBox(width: 8),
+        _statChip('LOSSES', '$losses', c.red),
+      ]),
+      const SizedBox(height: 10),
+      Divider(color: c.border, height: 1),
+      const SizedBox(height: 8),
+      // Orders list
+      Expanded(child: orders.isEmpty
+        ? Center(child: Text(_T.of(context).noTradesThisDay, style: TextStyle(color: c.textSecondary, fontSize: 12)))
+        : ListView.separated(
+            itemCount: orders.length,
+            separatorBuilder: (_, __) => Divider(color: c.border, height: 1),
+            itemBuilder: (_, i) {
+              final o = orders[i];
+              final dt = DateTime.tryParse(o.filledAt.isNotEmpty ? o.filledAt : o.createdAt);
+              final time = dt != null ? DateFormat('HH:mm:ss').format(dt) : '-';
+              final isBuy = o.side.toLowerCase() == 'buy';
+              final sideC = isBuy ? c.green : c.red;
+              final hasPl = o.profitCash != null;
+              final oPlC = hasPl ? (o.profitCash! >= 0 ? c.green : c.red) : c.textSecondary;
+              final oSign = hasPl && o.profitCash! >= 0 ? '+' : '';
+              return Padding(padding: const EdgeInsets.symmetric(vertical: 7), child: Row(children: [
+                // Time
+                SizedBox(width: 52, child: Text(time, style: TextStyle(color: c.textSecondary, fontSize: 10))),
+                // Symbol + side badge
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  decoration: BoxDecoration(color: sideC.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
+                  child: Text(o.side.toUpperCase(), style: TextStyle(color: sideC, fontSize: 9, fontWeight: FontWeight.w700)),
+                ),
+                const SizedBox(width: 6),
+                Text(o.symbol, style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.w700)),
+                const SizedBox(width: 4),
+                Text('×${o.filledQty.toStringAsFixed(0)}', style: TextStyle(color: c.textSecondary, fontSize: 10)),
+                const Spacer(),
+                // Price
+                Text('\$${o.filledAvgPrice.toStringAsFixed(2)}', style: TextStyle(color: c.textSecondary, fontSize: 10)),
+                const SizedBox(width: 10),
+                // P/L
+                if (hasPl) ...[
+                  Text('$oSign\$${_fmt(o.profitCash!)}', style: TextStyle(color: oPlC, fontSize: 12, fontWeight: FontWeight.w700)),
+                  if (o.profitPerc != null) ...[
+                    const SizedBox(width: 4),
+                    Text('${o.profitPerc! >= 0 ? '+' : ''}${o.profitPerc!.toStringAsFixed(1)}%', style: TextStyle(color: oPlC.withValues(alpha: 0.7), fontSize: 10)),
+                  ],
+                ] else
+                  Text('-', style: TextStyle(color: c.textSecondary, fontSize: 12)),
+              ]));
+            },
+          ),
+      ),
+    ]);
+  }
+
+  Widget _statChip(String label, String value, Color vc) => Expanded(child: Container(
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    decoration: BoxDecoration(color: vc.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(6)),
+    child: Column(children: [
+      Text(label, style: TextStyle(color: c.textSecondary, fontSize: 8, fontWeight: FontWeight.w600, letterSpacing: 0.3)),
+      const SizedBox(height: 2),
+      Text(value, style: TextStyle(color: vc, fontSize: 12, fontWeight: FontWeight.w800)),
+    ]),
+  ));
 }
 
 // =============================================================================
@@ -647,22 +945,31 @@ class _MonthlyTable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final m = a.monthlySummary; if (m.isEmpty) return const SizedBox.shrink();
+    final hdr = TextStyle(color: c.textSecondary, fontSize: 9, fontWeight: FontWeight.w600);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('MONTHLY SUMMARY', style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1)),
+      Text(_T.of(context).monthlySummary, style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1)),
       const SizedBox(height: 14),
-      Row(children: [
-        SizedBox(width: 70, child: Text('MONTH', style: TextStyle(color: c.textSecondary, fontSize: 9, fontWeight: FontWeight.w600))),
-        Expanded(child: Text('P/L', style: TextStyle(color: c.textSecondary, fontSize: 9, fontWeight: FontWeight.w600))),
-        SizedBox(width: 40, child: Text('WIN%', style: TextStyle(color: c.textSecondary, fontSize: 9, fontWeight: FontWeight.w600), textAlign: TextAlign.right)),
-        SizedBox(width: 30, child: Text('#', style: TextStyle(color: c.textSecondary, fontSize: 9, fontWeight: FontWeight.w600), textAlign: TextAlign.right)),
-      ]),
+      Builder(builder: (ctx) { final t = _T.of(ctx); return Row(children: [
+        SizedBox(width: 60, child: Text(t.month, style: hdr)),
+        Expanded(child: Text(t.plDollar, style: hdr)),
+        SizedBox(width: 64, child: Text(t.avgPerTrade, style: hdr, textAlign: TextAlign.right)),
+        SizedBox(width: 36, child: Text(t.winPct, style: hdr, textAlign: TextAlign.right)),
+        SizedBox(width: 28, child: Text('#', style: hdr, textAlign: TextAlign.right)),
+      ]); }),
       Divider(color: c.border, height: 16),
-      ...m.entries.take(6).map((e) { final s = e.value; final cl = s.totalPl >= 0 ? c.green : c.red; final sign = s.totalPl >= 0 ? '+' : '';
+      ...m.entries.take(6).map((e) {
+        final s = e.value;
+        final cl = s.totalPl >= 0 ? c.green : c.red;
+        final sign = s.totalPl >= 0 ? '+' : '';
+        final avg = s.tradeCount > 0 ? s.totalPl / s.tradeCount : 0.0;
+        final avgCl = avg >= 0 ? c.green : c.red;
+        final avgSign = avg >= 0 ? '+' : '';
         return Padding(padding: const EdgeInsets.only(bottom: 6), child: Row(children: [
-          SizedBox(width: 70, child: Text(e.key, style: TextStyle(color: c.textPrimary, fontSize: 11))),
+          SizedBox(width: 60, child: Text(e.key, style: TextStyle(color: c.textPrimary, fontSize: 11))),
           Expanded(child: Text('$sign\$${_fmt(s.totalPl)}', style: TextStyle(color: cl, fontSize: 12, fontWeight: FontWeight.w600))),
-          SizedBox(width: 40, child: Text('${s.winRate.toStringAsFixed(0)}%', style: TextStyle(color: c.textSecondary, fontSize: 11), textAlign: TextAlign.right)),
-          SizedBox(width: 30, child: Text('${s.tradeCount}', style: TextStyle(color: c.textSecondary, fontSize: 11), textAlign: TextAlign.right)),
+          SizedBox(width: 64, child: Text('$avgSign\$${_fmt(avg)}', style: TextStyle(color: avgCl, fontSize: 11, fontWeight: FontWeight.w600), textAlign: TextAlign.right)),
+          SizedBox(width: 36, child: Text('${s.winRate.toStringAsFixed(0)}%', style: TextStyle(color: c.textSecondary, fontSize: 11), textAlign: TextAlign.right)),
+          SizedBox(width: 28, child: Text('${s.tradeCount}', style: TextStyle(color: c.textSecondary, fontSize: 11), textAlign: TextAlign.right)),
         ]));
       }),
     ]);
@@ -677,15 +984,24 @@ class _HoldTime extends StatelessWidget {
   const _HoldTime({required this.a, required this.c});
   final TradingAnalyticsEntity a; final AppColors c;
   @override
-  Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    Text('AVG HOLD TIME', style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1)),
-    const SizedBox(height: 20),
-    _row('OVERALL', a.avgHoldTimeMinutes, c.textPrimary),
-    const SizedBox(height: 16),
-    _row('WINS ONLY', a.avgHoldTimeWinMinutes, c.green),
-    const SizedBox(height: 16),
-    _row('LOSSES ONLY', a.avgHoldTimeLossMinutes, c.red),
-  ]);
+  Widget build(BuildContext context) {
+    final t = _T.of(context);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Icon(Icons.timer_outlined, size: 14, color: c.textSecondary),
+        const SizedBox(width: 6),
+        Text(t.avgHoldTime, style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1)),
+      ]),
+      const SizedBox(height: 4),
+      Text(t.avgHoldTimeDesc, style: TextStyle(color: c.textSecondary.withValues(alpha: 0.5), fontSize: 10)),
+      const SizedBox(height: 20),
+      _row(t.overall, a.avgHoldTimeMinutes, c.textPrimary),
+      const SizedBox(height: 16),
+      _row(t.winsOnly, a.avgHoldTimeWinMinutes, c.green),
+      const SizedBox(height: 16),
+      _row(t.lossesOnly, a.avgHoldTimeLossMinutes, c.red),
+    ]);
+  }
   Widget _row(String l, double m, Color cl) => Row(children: [
     Expanded(child: Text(l, style: TextStyle(color: c.textSecondary, fontSize: 11, letterSpacing: 0.3))),
     Text(_fmtH(m), style: TextStyle(color: cl, fontSize: 24, fontWeight: FontWeight.w800)),
@@ -704,22 +1020,31 @@ class _TradeSize extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final b = a.tradeSizeBuckets; if (b.isEmpty) return const SizedBox.shrink();
+    final hdr = TextStyle(color: c.textSecondary, fontSize: 9, fontWeight: FontWeight.w600);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('P/L BY POSITION SIZE (SHARES)', style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1)),
+      Text(_T.of(context).plByPositionSize, style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1)),
       const SizedBox(height: 14),
-      Row(children: [
-        SizedBox(width: 100, child: Text('SIZE RANGE', style: TextStyle(color: c.textSecondary, fontSize: 9, fontWeight: FontWeight.w600))),
-        Expanded(child: Text('P/L', style: TextStyle(color: c.textSecondary, fontSize: 9, fontWeight: FontWeight.w600))),
-        SizedBox(width: 50, child: Text('WIN%', style: TextStyle(color: c.textSecondary, fontSize: 9, fontWeight: FontWeight.w600), textAlign: TextAlign.right)),
-        SizedBox(width: 50, child: Text('TRADES', style: TextStyle(color: c.textSecondary, fontSize: 9, fontWeight: FontWeight.w600), textAlign: TextAlign.right)),
-      ]),
+      Builder(builder: (ctx) { final t = _T.of(ctx); return Row(children: [
+        SizedBox(width: 80, child: Text(t.sizeRange, style: hdr)),
+        Expanded(child: Text(t.plDollar, style: hdr)),
+        SizedBox(width: 72, child: Text(t.avgPerTrade, style: hdr, textAlign: TextAlign.right)),
+        SizedBox(width: 40, child: Text(t.winPct, style: hdr, textAlign: TextAlign.right)),
+        SizedBox(width: 44, child: Text(t.trades.toUpperCase(), style: hdr, textAlign: TextAlign.right)),
+      ]); }),
       Divider(color: c.border, height: 16),
-      ..._order.where(b.containsKey).map((l) { final s = b[l]!; final cl = s.totalPl >= 0 ? c.green : c.red; final sign = s.totalPl >= 0 ? '+' : '';
+      ..._order.where(b.containsKey).map((l) {
+        final s = b[l]!;
+        final cl = s.totalPl >= 0 ? c.green : c.red;
+        final sign = s.totalPl >= 0 ? '+' : '';
+        final avg = s.averagePl;
+        final avgCl = avg >= 0 ? c.green : c.red;
+        final avgSign = avg >= 0 ? '+' : '';
         return Padding(padding: const EdgeInsets.only(bottom: 8), child: Row(children: [
-          SizedBox(width: 100, child: Text(l, style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.w500))),
+          SizedBox(width: 80, child: Text(l, style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.w500))),
           Expanded(child: Text('$sign\$${_fmt(s.totalPl)}', style: TextStyle(color: cl, fontSize: 12, fontWeight: FontWeight.w600))),
-          SizedBox(width: 50, child: Text('${s.winRate.toStringAsFixed(0)}%', style: TextStyle(color: c.textSecondary, fontSize: 11), textAlign: TextAlign.right)),
-          SizedBox(width: 50, child: Text('${s.tradeCount}', style: TextStyle(color: c.textSecondary, fontSize: 11), textAlign: TextAlign.right)),
+          SizedBox(width: 72, child: Text('$avgSign\$${_fmt(avg)}', style: TextStyle(color: avgCl, fontSize: 11, fontWeight: FontWeight.w600), textAlign: TextAlign.right)),
+          SizedBox(width: 40, child: Text('${s.winRate.toStringAsFixed(0)}%', style: TextStyle(color: c.textSecondary, fontSize: 11), textAlign: TextAlign.right)),
+          SizedBox(width: 44, child: Text('${s.tradeCount}', style: TextStyle(color: c.textSecondary, fontSize: 11), textAlign: TextAlign.right)),
         ]));
       }),
     ]);
@@ -739,7 +1064,7 @@ class _RrDist extends StatelessWidget {
     final rr = a.rrDistribution; if (rr.isEmpty) return const SizedBox.shrink();
     final maxC = rr.values.fold<int>(0, math.max);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('R/R DISTRIBUTION', style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1)),
+      Text(_T.of(context).rrDistribution, style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1)),
       const SizedBox(height: 14),
       ..._order.map((l) { final cnt = rr[l] ?? 0; final ratio = maxC > 0 ? (cnt / maxC).clamp(0.02, 1.0) : 0.02; final isLoss = l == 'Loss'; final bc = isLoss ? c.red : c.green;
         return Padding(padding: const EdgeInsets.only(bottom: 7), child: Row(children: [
@@ -806,7 +1131,7 @@ class _LoginFormState extends State<_LoginForm> {
                 children: [
                   SvgPicture.asset('assets/svg/ic_logo.svg', height: 40),
                   const SizedBox(height: 16),
-                  Text('Trading Analytics', style: TextStyle(color: c.textPrimary, fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+                  Text(_T.of(context).tradingAnalytics, style: TextStyle(color: c.textPrimary, fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
                   const SizedBox(height: 32),
 
                   // Demo button
@@ -847,12 +1172,12 @@ class _LoginFormState extends State<_LoginForm> {
                     ),
                   ] else ...[
                     // Login fields
-                    TextField(controller: widget.emailCtrl, decoration: InputDecoration(hintText: 'Email', prefixIcon: Icon(Icons.email_outlined, color: c.textSecondary, size: 18))),
+                    TextField(controller: widget.emailCtrl, decoration: InputDecoration(hintText: s.leadEmail, prefixIcon: Icon(Icons.email_outlined, color: c.textSecondary, size: 18))),
                     const SizedBox(height: 12),
-                    TextField(controller: widget.passwordCtrl, obscureText: true, onSubmitted: (_) => _onLogin(), decoration: InputDecoration(hintText: 'Password', prefixIcon: Icon(Icons.lock_outlined, color: c.textSecondary, size: 18))),
+                    TextField(controller: widget.passwordCtrl, obscureText: true, onSubmitted: (_) => _onLogin(), decoration: InputDecoration(hintText: s.leadEmail, prefixIcon: Icon(Icons.lock_outlined, color: c.textSecondary, size: 18))),
                     const SizedBox(height: 16),
-                    SizedBox(width: double.infinity, height: 46, child: ElevatedButton(onPressed: _onLogin, child: Text(state.hasSavedCredentials ? 'Quick Sign In' : s.tradingSignIn))),
-                    if (state.hasSavedCredentials) ...[const SizedBox(height: 8), Text('Saved: ${state.savedEmail}', style: TextStyle(color: c.textSecondary, fontSize: 12))],
+                    SizedBox(width: double.infinity, height: 46, child: ElevatedButton(onPressed: _onLogin, child: Text(state.hasSavedCredentials ? _T.of(context).quickSignIn : s.tradingSignIn))),
+                    if (state.hasSavedCredentials) ...[const SizedBox(height: 8), Text('${_T.of(context).saved}: ${state.savedEmail}', style: TextStyle(color: c.textSecondary, fontSize: 12))],
                   ],
 
                   const SizedBox(height: 32),
@@ -899,9 +1224,9 @@ class _ErrorView extends StatelessWidget {
   @override Widget build(BuildContext context) { final c = AppThemeScope.of(context).colors;
     return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
       Icon(Icons.error_outline, size: 48, color: c.red), const SizedBox(height: 16),
-      Text('Error', style: TextStyle(color: c.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)), const SizedBox(height: 8),
+      Text(_T.of(context).errorTitle, style: TextStyle(color: c.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)), const SizedBox(height: 8),
       Text(message, style: TextStyle(color: c.textSecondary), textAlign: TextAlign.center), const SizedBox(height: 24),
-      ElevatedButton(onPressed: () => context.read<TradingAnalyticsCubit>().logout(), child: const Text('Back')),
+      ElevatedButton(onPressed: () => context.read<TradingAnalyticsCubit>().logout(), child: Text(_T.of(context).errorBack)),
     ]));
   }
 }
@@ -910,33 +1235,51 @@ class _ErrorView extends StatelessWidget {
 // PORTFOLIO PAGE
 // =============================================================================
 
-class _PortfolioPage extends StatelessWidget {
+class _PortfolioPage extends StatefulWidget {
   const _PortfolioPage({required this.c, required this.state});
   final AppColors c; final TradingAnalyticsState state;
   @override
+  State<_PortfolioPage> createState() => _PortfolioPageState();
+}
+
+class _PortfolioPageState extends State<_PortfolioPage> {
+  bool _plInPct = false;
+
+  @override
   Widget build(BuildContext context) {
+    final c = widget.c;
+    final state = widget.state;
     if (state.positionsLoading) return Center(child: CircularProgressIndicator(color: c.green));
     final pos = state.positions;
     if (pos.isEmpty) return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
       Icon(Icons.account_balance_wallet_outlined, size: 48, color: c.textSecondary), const SizedBox(height: 12),
-      Text('No open positions', style: TextStyle(color: c.textSecondary, fontSize: 16)),
+      Text(_T.of(context).noOpenPositions, style: TextStyle(color: c.textSecondary, fontSize: 16)),
       const SizedBox(height: 8),
       GestureDetector(onTap: () => context.read<TradingAnalyticsCubit>().loadPositions(),
-        child: MouseRegion(cursor: SystemMouseCursors.click, child: Text('Refresh', style: TextStyle(color: c.green, fontSize: 13)))),
+        child: MouseRegion(cursor: SystemMouseCursors.click, child: Text(_T.of(context).refresh, style: TextStyle(color: c.green, fontSize: 13)))),
     ]));
 
     final totalValue = pos.fold<double>(0, (s, p) => s + p.marketValue);
     final totalPl = pos.fold<double>(0, (s, p) => s + p.profitCash);
+    // Cost basis = marketValue - unrealizedPl per position.
+    final totalCost = pos.fold<double>(0, (s, p) => s + (p.marketValue - p.profitCash));
+    final totalPlPct = totalCost != 0 ? (totalPl / totalCost.abs()) * 100 : 0.0;
     final sparks = state.sparklines;
+
+    final plColor = totalPl >= 0 ? c.green : c.red;
+    final plSign = totalPl >= 0 ? '+' : '';
+    final plLabel = _plInPct
+        ? '$plSign${totalPlPct.toStringAsFixed(2)}%'
+        : _fmtD(totalPl);
 
     return ListView(padding: const EdgeInsets.all(20), children: [
       // Summary row.
       Row(children: [
-        _summaryCard('TOTAL VALUE', '\$${_fmt(totalValue)}', c.textPrimary),
+        _summaryCard(_T.of(context).totalValue, '\$${_fmt(totalValue)}', c.textPrimary, null, c),
         const SizedBox(width: 12),
-        _summaryCard('TOTAL P/L', _fmtD(totalPl), totalPl >= 0 ? c.green : c.red),
+        _summaryCard('TOTAL P/L', plLabel, plColor, _plInPct, c),
         const SizedBox(width: 12),
-        _summaryCard('POSITIONS', '${pos.length}', c.textPrimary),
+        _summaryCard(_T.of(context).positions, '${pos.length}', c.textPrimary, null, c),
         const SizedBox(width: 12),
         // Export button.
         GestureDetector(
@@ -947,7 +1290,7 @@ class _PortfolioPage extends StatelessWidget {
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               Icon(Icons.download_rounded, size: 16, color: c.green),
               const SizedBox(width: 8),
-              Text('EXPORT CSV', style: TextStyle(color: c.green, fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+              Text(_T.of(context).exportExcel, style: TextStyle(color: c.green, fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
             ]),
           )),
         ),
@@ -958,16 +1301,16 @@ class _PortfolioPage extends StatelessWidget {
         decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(12), border: Border.all(color: c.border)),
         child: Column(children: [
           // Header.
-          Padding(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14), child: Row(children: [
-            SizedBox(width: 90, child: Text('SYMBOL', style: _hdr)),
-            SizedBox(width: 70, child: Text('30D CHART', style: _hdr)),
-            Expanded(child: Text('QTY', style: _hdr, textAlign: TextAlign.right)),
-            Expanded(child: Text('AVG PRICE', style: _hdr, textAlign: TextAlign.right)),
-            Expanded(child: Text('CURRENT', style: _hdr, textAlign: TextAlign.right)),
-            Expanded(child: Text('MKT VALUE', style: _hdr, textAlign: TextAlign.right)),
-            Expanded(child: Text('P/L', style: _hdr, textAlign: TextAlign.right)),
-            SizedBox(width: 60, child: Text('P/L %', style: _hdr, textAlign: TextAlign.right)),
-          ])),
+          Builder(builder: (ctx) { final t = _T.of(ctx); return Padding(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14), child: Row(children: [
+            SizedBox(width: 90, child: Text(t.symbol, style: _hdr)),
+            SizedBox(width: 70, child: Text(t.chart30d, style: _hdr)),
+            Expanded(child: Text(t.qty, style: _hdr, textAlign: TextAlign.right)),
+            Expanded(child: Text(t.avgPrice, style: _hdr, textAlign: TextAlign.right)),
+            Expanded(child: Text(t.current, style: _hdr, textAlign: TextAlign.right)),
+            Expanded(child: Text(t.mktValue, style: _hdr, textAlign: TextAlign.right)),
+            Expanded(child: Text(t.plDollar, style: _hdr, textAlign: TextAlign.right)),
+            SizedBox(width: 60, child: Text(t.plPercent, style: _hdr, textAlign: TextAlign.right)),
+          ])); }),
           Divider(color: c.border, height: 1),
           // Rows.
           ...pos.map((p) { final plC = p.profitCash >= 0 ? c.green : c.red; final sign = p.profitCash >= 0 ? '+' : '';
@@ -996,25 +1339,130 @@ class _PortfolioPage extends StatelessWidget {
     ]);
   }
 
-  Widget _summaryCard(String label, String value, Color vc) => Expanded(child: Container(
+  // bool? togglePl — если не null, карточка P/L с переключателем $ / %
+  Widget _summaryCard(String label, String value, Color vc, bool? togglePl, AppColors c) => Expanded(child: Container(
     padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(12), border: Border.all(color: c.border)),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label, style: TextStyle(color: c.textSecondary, fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+      Row(children: [
+        Text(label, style: TextStyle(color: c.textSecondary, fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+        if (togglePl != null) ...[
+          const Spacer(),
+          GestureDetector(
+            onTap: () => setState(() => _plInPct = !_plInPct),
+            child: MouseRegion(cursor: SystemMouseCursors.click, child: Container(
+              decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(5)),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                _plToggleBtn('\$', !_plInPct, c),
+                _plToggleBtn('%', _plInPct, c),
+              ]),
+            )),
+          ),
+        ],
+      ]),
       const SizedBox(height: 6),
       Text(value, style: TextStyle(color: vc, fontSize: 22, fontWeight: FontWeight.w800)),
     ]),
   ));
 
+  Widget _plToggleBtn(String label, bool active, AppColors c) => AnimatedContainer(
+    duration: const Duration(milliseconds: 150),
+    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+    decoration: BoxDecoration(
+      color: active ? c.textPrimary : Colors.transparent,
+      borderRadius: BorderRadius.circular(4),
+    ),
+    child: Text(label, style: TextStyle(
+      color: active ? c.bg : c.textSecondary,
+      fontSize: 9,
+      fontWeight: FontWeight.w700,
+    )),
+  );
+
   static void _exportCsv(List<TradingPositionDto> pos) {
-    final buf = StringBuffer('Symbol,Qty,Avg Price,Current Price,Market Value,P/L,P/L %\n');
-    for (final p in pos) {
-      buf.writeln('${p.symbol},${p.qty},${p.avgEntryPrice},${p.currentPrice},${p.marketValue},${p.profitCash},${p.profitPercent}');
+    final excel = xl.Excel.createExcel();
+    final sheet = excel['Portfolio'];
+    excel.delete('Sheet1');
+
+    // ── Styles ──
+    final headerStyle = xl.CellStyle(
+      bold: true,
+      fontColorHex: xl.ExcelColor.fromHexString('#FFFFFF'),
+      backgroundColorHex: xl.ExcelColor.fromHexString('#0A0A0A'),
+      horizontalAlign: xl.HorizontalAlign.Center,
+    );
+    final totalStyle = xl.CellStyle(
+      bold: true,
+      fontColorHex: xl.ExcelColor.fromHexString('#0A0A0A'),
+      backgroundColorHex: xl.ExcelColor.fromHexString('#F0F0F0'),
+    );
+    xl.CellStyle plStyle(double v) => xl.CellStyle(
+      bold: true,
+      fontColorHex: xl.ExcelColor.fromHexString(v >= 0 ? '#00A878' : '#E63946'),
+    );
+
+    // ── Title ──
+    sheet.merge(xl.CellIndex.indexByString('A1'), xl.CellIndex.indexByString('G1'));
+    final title = sheet.cell(xl.CellIndex.indexByString('A1'));
+    title.value = xl.TextCellValue('Portfolio — ${DateFormat('dd MMM yyyy, HH:mm').format(DateTime.now())}');
+    title.cellStyle = xl.CellStyle(bold: true, fontSize: 13, fontColorHex: xl.ExcelColor.fromHexString('#0A0A0A'));
+    sheet.setRowHeight(0, 28);
+
+    // ── Headers ──
+    const headers = ['Symbol', 'Qty', 'Avg Price', 'Current Price', 'Mkt Value', 'P/L \$', 'P/L %'];
+    for (var i = 0; i < headers.length; i++) {
+      final cell = sheet.cell(xl.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 1));
+      cell.value = xl.TextCellValue(headers[i]);
+      cell.cellStyle = headerStyle;
     }
-    _downloadFile('portfolio_${DateFormat('yyyyMMdd').format(DateTime.now())}.csv', buf.toString());
+    sheet.setRowHeight(1, 22);
+
+    // ── Data rows ──
+    double totalMktValue = 0, totalPl = 0;
+    for (var r = 0; r < pos.length; r++) {
+      final p = pos[r];
+      totalMktValue += p.marketValue;
+      totalPl += p.profitCash;
+      final row = r + 2;
+      final rowBg = xl.CellStyle(backgroundColorHex: xl.ExcelColor.fromHexString(r.isEven ? '#FAFAFA' : '#FFFFFF'));
+      void setCell(int col, xl.CellValue val, [xl.CellStyle? style]) {
+        final c = sheet.cell(xl.CellIndex.indexByColumnRow(columnIndex: col, rowIndex: row));
+        c.value = val;
+        c.cellStyle = style ?? rowBg;
+      }
+      setCell(0, xl.TextCellValue(p.symbol), xl.CellStyle(bold: true, backgroundColorHex: xl.ExcelColor.fromHexString(r.isEven ? '#FAFAFA' : '#FFFFFF')));
+      setCell(1, xl.DoubleCellValue(p.qty));
+      setCell(2, xl.DoubleCellValue(p.avgEntryPrice));
+      setCell(3, xl.DoubleCellValue(p.currentPrice));
+      setCell(4, xl.DoubleCellValue(p.marketValue));
+      setCell(5, xl.DoubleCellValue(p.profitCash), plStyle(p.profitCash));
+      setCell(6, xl.TextCellValue('${p.profitPercent >= 0 ? '+' : ''}${p.profitPercent.toStringAsFixed(2)}%'), plStyle(p.profitPercent));
+      sheet.setRowHeight(row, 20);
+    }
+
+    // ── Total row ──
+    final totalRow = pos.length + 2;
+    sheet.merge(xl.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: totalRow), xl.CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: totalRow));
+    final totalLabel = sheet.cell(xl.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: totalRow));
+    totalLabel.value = xl.TextCellValue('TOTAL (${pos.length} positions)');
+    totalLabel.cellStyle = totalStyle;
+    final mktCell = sheet.cell(xl.CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: totalRow));
+    mktCell.value = xl.DoubleCellValue(totalMktValue);
+    mktCell.cellStyle = totalStyle;
+    final plCell = sheet.cell(xl.CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: totalRow));
+    plCell.value = xl.DoubleCellValue(totalPl);
+    plCell.cellStyle = xl.CellStyle(bold: true, fontColorHex: xl.ExcelColor.fromHexString(totalPl >= 0 ? '#00A878' : '#E63946'), backgroundColorHex: xl.ExcelColor.fromHexString('#F0F0F0'));
+    sheet.setRowHeight(totalRow, 22);
+
+    // ── Column widths ──
+    sheet.setColumnWidth(0, 12); sheet.setColumnWidth(1, 8); sheet.setColumnWidth(2, 12);
+    sheet.setColumnWidth(3, 14); sheet.setColumnWidth(4, 14); sheet.setColumnWidth(5, 12); sheet.setColumnWidth(6, 10);
+
+    final bytes = excel.encode()!;
+    _downloadXlsx('portfolio_${DateFormat('yyyyMMdd').format(DateTime.now())}.xlsx', bytes);
   }
 
-  TextStyle get _hdr => TextStyle(color: c.textSecondary, fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 0.3);
+  TextStyle get _hdr => TextStyle(color: widget.c.textSecondary, fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 0.3);
 }
 
 // Mini sparkline painter.
@@ -1045,22 +1493,24 @@ class _SparkPainter extends CustomPainter {
 class _OrdersPage extends StatelessWidget {
   const _OrdersPage({required this.c, required this.state});
   final AppColors c; final TradingAnalyticsState state;
+
   @override
   Widget build(BuildContext context) {
     if (state.ordersLoading) return Center(child: CircularProgressIndicator(color: c.green));
     final orders = state.recentOrders;
     if (orders.isEmpty) return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
       Icon(Icons.receipt_long_rounded, size: 48, color: c.textSecondary), const SizedBox(height: 12),
-      Text('No orders found', style: TextStyle(color: c.textSecondary, fontSize: 16)),
+      Text(_T.of(context).noOrdersFound, style: TextStyle(color: c.textSecondary, fontSize: 16)),
       const SizedBox(height: 8),
       GestureDetector(onTap: () => context.read<TradingAnalyticsCubit>().loadOrders(),
-        child: MouseRegion(cursor: SystemMouseCursors.click, child: Text('Refresh', style: TextStyle(color: c.green, fontSize: 13)))),
+        child: MouseRegion(cursor: SystemMouseCursors.click, child: Text(_T.of(context).refresh, style: TextStyle(color: c.green, fontSize: 13)))),
     ]));
 
+    final hdr = TextStyle(color: c.textSecondary, fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 0.3);
+
     return Padding(padding: const EdgeInsets.all(20), child: Column(children: [
-      // Export row.
       Row(children: [
-        Text('${orders.length} orders', style: TextStyle(color: c.textSecondary, fontSize: 12)),
+        Text('${orders.length} ${_T.of(context).orders}', style: TextStyle(color: c.textSecondary, fontSize: 12)),
         const Spacer(),
         GestureDetector(
           onTap: () => _exportCsv(orders),
@@ -1070,68 +1520,141 @@ class _OrdersPage extends StatelessWidget {
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               Icon(Icons.download_rounded, size: 14, color: c.green),
               const SizedBox(width: 6),
-              Text('EXPORT CSV', style: TextStyle(color: c.green, fontSize: 10, fontWeight: FontWeight.w600)),
+              Text(_T.of(context).exportExcel, style: TextStyle(color: c.green, fontSize: 10, fontWeight: FontWeight.w600)),
             ]),
           )),
         ),
       ]),
       const SizedBox(height: 12),
-      // Table.
       Expanded(child: Container(
-      decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(12), border: Border.all(color: c.border)),
-      child: Column(children: [
-        Padding(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14), child: Row(children: [
-          SizedBox(width: 140, child: Text('DATE', style: _hdr)),
-          SizedBox(width: 70, child: Text('SYMBOL', style: _hdr)),
-          SizedBox(width: 50, child: Text('SIDE', style: _hdr)),
-          Expanded(child: Text('QTY', style: _hdr, textAlign: TextAlign.right)),
-          Expanded(child: Text('PRICE', style: _hdr, textAlign: TextAlign.right)),
-          SizedBox(width: 70, child: Text('STATUS', style: _hdr, textAlign: TextAlign.center)),
-          Expanded(child: Text('P/L', style: _hdr, textAlign: TextAlign.right)),
-        ])),
-        Divider(color: c.border, height: 1),
-        // Rows.
-        Expanded(child: ListView.builder(
-          itemCount: orders.length,
-          itemBuilder: (_, i) {
-            final o = orders[i];
-            final dt = DateTime.tryParse(o.filledAt.isNotEmpty ? o.filledAt : o.createdAt);
-            final dateStr = dt != null ? DateFormat('MMM dd, yyyy  HH:mm').format(dt) : '-';
-            final isBuy = o.side.toLowerCase() == 'buy';
-            final sideC = isBuy ? c.green : c.red;
-            final statusC = _statusColor(o.status, c);
-            final hasPl = o.profitCash != null;
-            final plC = hasPl ? (o.profitCash! >= 0 ? c.green : c.red) : c.textSecondary;
-            final plSign = hasPl && o.profitCash! >= 0 ? '+' : '';
+        decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(12), border: Border.all(color: c.border)),
+        child: Column(children: [
+          Builder(builder: (ctx) { final t = _T.of(ctx); return Padding(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14), child: Row(children: [
+            SizedBox(width: 140, child: Text(t.date, style: hdr)),
+            SizedBox(width: 70, child: Text(t.symbol, style: hdr)),
+            SizedBox(width: 50, child: Text(t.side, style: hdr)),
+            Expanded(child: Text(t.qty, style: hdr, textAlign: TextAlign.right)),
+            Expanded(child: Text(t.price, style: hdr, textAlign: TextAlign.right)),
+            SizedBox(width: 70, child: Text(t.status, style: hdr, textAlign: TextAlign.center)),
+            Expanded(child: Text(t.plDollar, style: hdr, textAlign: TextAlign.right)),
+            SizedBox(width: 70, child: Text(t.plPercent, style: hdr, textAlign: TextAlign.right)),
+          ])); }),
+          Divider(color: c.border, height: 1),
+          Expanded(child: ListView.builder(
+            itemCount: orders.length,
+            itemBuilder: (_, i) {
+              final o = orders[i];
+              final dt = DateTime.tryParse(o.filledAt.isNotEmpty ? o.filledAt : o.createdAt);
+              final dateStr = dt != null ? DateFormat('MMM dd, yyyy  HH:mm').format(dt) : '-';
+              final sideC = o.side.toLowerCase() == 'buy' ? c.green : c.red;
+              final statusC = _statusColor(o.status, c);
+              final hasPl = o.profitCash != null;
+              final hasPct = o.profitPerc != null;
+              final plC = hasPl ? (o.profitCash! >= 0 ? c.green : c.red) : c.textSecondary;
+              final pctC = hasPct ? (o.profitPerc! >= 0 ? c.green : c.red) : c.textSecondary;
+              final plSign = hasPl && o.profitCash! >= 0 ? '+' : '';
+              final pctSign = hasPct && o.profitPerc! >= 0 ? '+' : '';
 
-            return Padding(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8), child: Row(children: [
-              SizedBox(width: 140, child: Text(dateStr, style: TextStyle(color: c.textSecondary, fontSize: 11))),
-              SizedBox(width: 70, child: Text(o.symbol, style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.w600))),
-              SizedBox(width: 50, child: Text(o.side.toUpperCase(), style: TextStyle(color: sideC, fontSize: 11, fontWeight: FontWeight.w600))),
-              Expanded(child: Text('${o.filledQty > 0 ? o.filledQty.toStringAsFixed(0) : '-'}', style: TextStyle(color: c.textPrimary, fontSize: 11), textAlign: TextAlign.right)),
-              Expanded(child: Text(o.filledAvgPrice > 0 ? '\$${o.filledAvgPrice.toStringAsFixed(2)}' : '-', style: TextStyle(color: c.textSecondary, fontSize: 11), textAlign: TextAlign.right)),
-              SizedBox(width: 70, child: Center(child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(color: statusC.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
-                child: Text(o.status.toUpperCase(), style: TextStyle(color: statusC, fontSize: 8, fontWeight: FontWeight.w600, letterSpacing: 0.3)),
-              ))),
-              Expanded(child: Text(hasPl ? '$plSign\$${_fmt(o.profitCash!)}' : '-', style: TextStyle(color: plC, fontSize: 11, fontWeight: FontWeight.w600), textAlign: TextAlign.right)),
-            ]));
-          },
-        )),
-      ]),
-    )),
+              return Padding(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8), child: Row(children: [
+                SizedBox(width: 140, child: Text(dateStr, style: TextStyle(color: c.textSecondary, fontSize: 11))),
+                SizedBox(width: 70, child: Text(o.symbol, style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.w600))),
+                SizedBox(width: 50, child: Text(o.side.toUpperCase(), style: TextStyle(color: sideC, fontSize: 11, fontWeight: FontWeight.w600))),
+                Expanded(child: Text(o.filledQty > 0 ? o.filledQty.toStringAsFixed(0) : '-', style: TextStyle(color: c.textPrimary, fontSize: 11), textAlign: TextAlign.right)),
+                Expanded(child: Text(o.filledAvgPrice > 0 ? '\$${o.filledAvgPrice.toStringAsFixed(2)}' : '-', style: TextStyle(color: c.textSecondary, fontSize: 11), textAlign: TextAlign.right)),
+                SizedBox(width: 70, child: Center(child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(color: statusC.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
+                  child: Text(o.status.toUpperCase(), style: TextStyle(color: statusC, fontSize: 8, fontWeight: FontWeight.w600, letterSpacing: 0.3)),
+                ))),
+                Expanded(child: Text(hasPl ? '$plSign\$${_fmt(o.profitCash!)}' : '-', style: TextStyle(color: plC, fontSize: 11, fontWeight: FontWeight.w600), textAlign: TextAlign.right)),
+                SizedBox(width: 70, child: Text(hasPct ? '$pctSign${o.profitPerc!.toStringAsFixed(2)}%' : '-', style: TextStyle(color: pctC, fontSize: 11, fontWeight: FontWeight.w600), textAlign: TextAlign.right)),
+              ]));
+            },
+          )),
+        ]),
+      )),
     ]));
   }
 
   static void _exportCsv(List<TradingOrderDto> orders) {
-    final buf = StringBuffer('Date,Symbol,Side,Qty,Price,Status,P/L\n');
-    for (final o in orders) {
+    final excel = xl.Excel.createExcel();
+    final sheet = excel['Orders'];
+    excel.delete('Sheet1');
+
+    // ── Styles ──
+    final headerStyle = xl.CellStyle(
+      bold: true,
+      fontColorHex: xl.ExcelColor.fromHexString('#FFFFFF'),
+      backgroundColorHex: xl.ExcelColor.fromHexString('#0A0A0A'),
+      horizontalAlign: xl.HorizontalAlign.Center,
+    );
+    xl.CellStyle plStyle(double v) => xl.CellStyle(bold: true, fontColorHex: xl.ExcelColor.fromHexString(v >= 0 ? '#00A878' : '#E63946'));
+    xl.CellStyle sideStyle(String side) => xl.CellStyle(bold: true, fontColorHex: xl.ExcelColor.fromHexString(side.toLowerCase() == 'buy' ? '#00A878' : '#E63946'));
+
+    // ── Title ──
+    sheet.merge(xl.CellIndex.indexByString('A1'), xl.CellIndex.indexByString('H1'));
+    final title = sheet.cell(xl.CellIndex.indexByString('A1'));
+    title.value = xl.TextCellValue('Order History — ${DateFormat('dd MMM yyyy, HH:mm').format(DateTime.now())} (${orders.length} orders)');
+    title.cellStyle = xl.CellStyle(bold: true, fontSize: 13, fontColorHex: xl.ExcelColor.fromHexString('#0A0A0A'));
+    sheet.setRowHeight(0, 28);
+
+    // ── Headers ──
+    const headers = ['Date', 'Symbol', 'Side', 'Qty', 'Price', 'Status', 'P/L \$', 'P/L %'];
+    for (var i = 0; i < headers.length; i++) {
+      final cell = sheet.cell(xl.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 1));
+      cell.value = xl.TextCellValue(headers[i]);
+      cell.cellStyle = headerStyle;
+    }
+    sheet.setRowHeight(1, 22);
+
+    // ── Summary stats ──
+    final filled = orders.where((o) => o.profitCash != null);
+    final totalPl = filled.fold<double>(0, (s, o) => s + o.profitCash!);
+    final wins = filled.where((o) => o.profitCash! > 0).length;
+    final total = filled.length;
+
+    // ── Data rows ──
+    for (var r = 0; r < orders.length; r++) {
+      final o = orders[r];
+      final row = r + 2;
       final dt = DateTime.tryParse(o.filledAt.isNotEmpty ? o.filledAt : o.createdAt);
       final dateStr = dt != null ? DateFormat('yyyy-MM-dd HH:mm').format(dt) : '';
-      buf.writeln('$dateStr,${o.symbol},${o.side},${o.filledQty},${o.filledAvgPrice},${o.status},${o.profitCash ?? ''}');
+      final rowBg = xl.CellStyle(backgroundColorHex: xl.ExcelColor.fromHexString(r.isEven ? '#FAFAFA' : '#FFFFFF'));
+
+      void setCell(int col, xl.CellValue val, [xl.CellStyle? style]) {
+        final c = sheet.cell(xl.CellIndex.indexByColumnRow(columnIndex: col, rowIndex: row));
+        c.value = val; c.cellStyle = style ?? rowBg;
+      }
+
+      setCell(0, xl.TextCellValue(dateStr));
+      setCell(1, xl.TextCellValue(o.symbol), xl.CellStyle(bold: true, backgroundColorHex: xl.ExcelColor.fromHexString(r.isEven ? '#FAFAFA' : '#FFFFFF')));
+      setCell(2, xl.TextCellValue(o.side.toUpperCase()), sideStyle(o.side));
+      setCell(3, xl.DoubleCellValue(o.filledQty));
+      setCell(4, xl.DoubleCellValue(o.filledAvgPrice));
+      setCell(5, xl.TextCellValue(o.status.toUpperCase()));
+      if (o.profitCash != null) setCell(6, xl.DoubleCellValue(o.profitCash!), plStyle(o.profitCash!));
+      if (o.profitPerc != null) setCell(7, xl.TextCellValue('${o.profitPerc! >= 0 ? '+' : ''}${o.profitPerc!.toStringAsFixed(2)}%'), plStyle(o.profitPerc!));
+      sheet.setRowHeight(row, 20);
     }
-    _downloadFile('orders_${DateFormat('yyyyMMdd').format(DateTime.now())}.csv', buf.toString());
+
+    // ── Summary row ──
+    final sumRow = orders.length + 2;
+    sheet.merge(xl.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: sumRow), xl.CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: sumRow));
+    final sumLabel = sheet.cell(xl.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: sumRow));
+    sumLabel.value = xl.TextCellValue('TOTAL: $total trades · Win Rate ${total > 0 ? (wins / total * 100).toStringAsFixed(1) : 0}%');
+    sumLabel.cellStyle = xl.CellStyle(bold: true, backgroundColorHex: xl.ExcelColor.fromHexString('#F0F0F0'));
+    final sumPl = sheet.cell(xl.CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: sumRow));
+    sumPl.value = xl.DoubleCellValue(totalPl);
+    sumPl.cellStyle = xl.CellStyle(bold: true, fontColorHex: xl.ExcelColor.fromHexString(totalPl >= 0 ? '#00A878' : '#E63946'), backgroundColorHex: xl.ExcelColor.fromHexString('#F0F0F0'));
+    sheet.setRowHeight(sumRow, 22);
+
+    // ── Column widths ──
+    sheet.setColumnWidth(0, 18); sheet.setColumnWidth(1, 10); sheet.setColumnWidth(2, 8);
+    sheet.setColumnWidth(3, 8);  sheet.setColumnWidth(4, 10); sheet.setColumnWidth(5, 14);
+    sheet.setColumnWidth(6, 12); sheet.setColumnWidth(7, 10);
+
+    final bytes = excel.encode()!;
+    _downloadXlsx('orders_${DateFormat('yyyyMMdd').format(DateTime.now())}.xlsx', bytes);
   }
 
   static Color _statusColor(String status, AppColors c) {
@@ -1143,8 +1666,6 @@ class _OrdersPage extends StatelessWidget {
       default: return c.textSecondary;
     }
   }
-
-  TextStyle get _hdr => TextStyle(color: c.textSecondary, fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 0.3);
 }
 
 // =============================================================================
@@ -1164,7 +1685,7 @@ class _SkeletonS extends State<_Skeleton> with SingleTickerProviderStateMixin {
     return AnimatedBuilder(animation: _ac, builder: (_, __) { final t = (_ac.value * 2 - 1).abs(); final cl = Color.lerp(c.card, c.border, t * 0.3)!;
       return ListView(padding: const EdgeInsets.all(32), physics: const NeverScrollableScrollPhysics(), children: [
         Center(child: Column(children: [
-          Text('Loading trading data...', style: TextStyle(color: c.textSecondary, fontSize: 16, fontWeight: FontWeight.w600)),
+          Builder(builder: (ctx) => Text(_T.of(ctx).loadingData, style: TextStyle(color: c.textSecondary, fontSize: 16, fontWeight: FontWeight.w600))),
           const SizedBox(height: 12), SizedBox(width: 180, child: LinearProgressIndicator(backgroundColor: c.border, color: c.green.withOpacity(0.4), minHeight: 2)),
         ])),
         const SizedBox(height: 24),
@@ -1181,51 +1702,121 @@ class _SkeletonS extends State<_Skeleton> with SingleTickerProviderStateMixin {
 // AI INSIGHTS PAGE
 // =============================================================================
 
-class _AiPage extends StatelessWidget {
+// Period filter for AI session analysis.
+enum _AiPeriod { day, week, month, all }
+
+extension _AiPeriodExt on _AiPeriod {
+  String get label => switch (this) {
+    _AiPeriod.day   => 'ДЕНЬ',
+    _AiPeriod.week  => 'НЕДЕЛЯ',
+    _AiPeriod.month => 'МЕСЯЦ',
+    _AiPeriod.all   => 'ВСЁ ВРЕМЯ',
+  };
+
+  DateTime? get cutoff {
+    final now = DateTime.now();
+    return switch (this) {
+      _AiPeriod.day   => DateTime(now.year, now.month, now.day),
+      _AiPeriod.week  => now.subtract(const Duration(days: 7)),
+      _AiPeriod.month => DateTime(now.year, now.month, 1),
+      _AiPeriod.all   => null,
+    };
+  }
+}
+
+class _AiPage extends StatefulWidget {
   const _AiPage({required this.c, required this.state});
   final AppColors c; final TradingAnalyticsState state;
+  @override
+  State<_AiPage> createState() => _AiPageState();
+}
+
+class _AiPageState extends State<_AiPage> {
+  _AiPeriod _period = _AiPeriod.all;
+
+  List<TradingOrderDto> get _filteredOrders {
+    final cutoff = _period.cutoff;
+    if (cutoff == null) return widget.state.allOrders;
+    return widget.state.allOrders.where((o) {
+      final raw = o.filledAt.isNotEmpty ? o.filledAt : o.createdAt;
+      final dt = DateTime.tryParse(raw);
+      return dt != null && dt.isAfter(cutoff);
+    }).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final c = widget.c;
     return BlocBuilder<AiCubit, AiState>(builder: (context, aiState) {
       final modules = [
-        (AiModule.tradeReview, 'TRADE REVIEW', Icons.rate_review_rounded, 'AI анализ последних сделок: качество входов/выходов, ошибки, рекомендации'),
+        (AiModule.tradeReview, 'TRADE REVIEW', Icons.rate_review_rounded, 'AI анализ сделок за период: качество входов/выходов, ошибки, рекомендации'),
         (AiModule.portfolioAdvisor, 'PORTFOLIO ADVISOR', Icons.pie_chart_rounded, 'Анализ портфеля: диверсификация, риски, рекомендации по ребалансировке'),
         (AiModule.patternDetection, 'PATTERN DETECTION', Icons.psychology_rounded, 'Поиск скрытых паттернов: лучшие часы/дни, поведенческие привычки'),
         (AiModule.riskScore, 'RISK SCORE', Icons.shield_rounded, 'Комплексный скор риска 0-100 с разбивкой по компонентам'),
       ];
+      final filtered = _filteredOrders;
 
       return ListView(padding: const EdgeInsets.all(20), children: [
-        // Run all button.
+        // Period selector + Run All button.
         Row(children: [
+          // Period tabs.
+          Container(
+            decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(8)),
+            child: Row(mainAxisSize: MainAxisSize.min, children: _AiPeriod.values.map((p) {
+              final active = p == _period;
+              return GestureDetector(
+                onTap: () => setState(() => _period = p),
+                child: MouseRegion(cursor: SystemMouseCursors.click, child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: active ? c.textPrimary : Colors.transparent,
+                    borderRadius: BorderRadius.circular(7),
+                  ),
+                  child: Text(p.label, style: TextStyle(
+                    color: active ? c.bg : c.textSecondary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.3,
+                  )),
+                )),
+              );
+            }).toList()),
+          ),
+          const SizedBox(width: 8),
+          // Trade count badge.
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+            decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(7), border: Border.all(color: c.border)),
+            child: Builder(builder: (ctx) => Text('${filtered.length} ${_T.of(ctx).sdelek}', style: TextStyle(color: c.textSecondary, fontSize: 10, fontWeight: FontWeight.w600))),
+          ),
+          const Spacer(),
+          // Run All button.
           GestureDetector(
-            onTap: () => _runAll(context),
+            onTap: () => _runAll(context, filtered),
             child: MouseRegion(cursor: SystemMouseCursors.click, child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              decoration: BoxDecoration(color: c.green.withOpacity(0.1), borderRadius: BorderRadius.circular(10), border: Border.all(color: c.green.withOpacity(0.3))),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+              decoration: BoxDecoration(color: c.green.withOpacity(0.1), borderRadius: BorderRadius.circular(8), border: Border.all(color: c.green.withOpacity(0.3))),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.auto_awesome_rounded, size: 16, color: c.green),
-                const SizedBox(width: 8),
-                Text('RUN ALL ANALYSIS', style: TextStyle(color: c.green, fontSize: 12, fontWeight: FontWeight.w700)),
+                Icon(Icons.auto_awesome_rounded, size: 14, color: c.green),
+                const SizedBox(width: 6),
+                Builder(builder: (ctx) => Text(_T.of(ctx).runAll, style: TextStyle(color: c.green, fontSize: 11, fontWeight: FontWeight.w700))),
               ]),
             )),
           ),
-          const SizedBox(width: 12),
-          if (aiState.loading.isNotEmpty)
-            Row(children: [
-              SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: c.green)),
-              const SizedBox(width: 8),
-              Text('Analyzing...', style: TextStyle(color: c.textSecondary, fontSize: 12)),
-            ]),
+          if (aiState.loading.isNotEmpty) ...[
+            const SizedBox(width: 12),
+            SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: c.green)),
+          ],
         ]),
         const SizedBox(height: 20),
         // Module cards in 2x2 grid.
         for (var i = 0; i < modules.length; i += 2) ...[
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Expanded(child: _moduleCard(context, aiState, modules[i].$1, modules[i].$2, modules[i].$3, modules[i].$4)),
+            Expanded(child: _moduleCard(context, aiState, modules[i].$1, modules[i].$2, modules[i].$3, modules[i].$4, filtered)),
             const SizedBox(width: 12),
             if (i + 1 < modules.length)
-              Expanded(child: _moduleCard(context, aiState, modules[i + 1].$1, modules[i + 1].$2, modules[i + 1].$3, modules[i + 1].$4))
+              Expanded(child: _moduleCard(context, aiState, modules[i + 1].$1, modules[i + 1].$2, modules[i + 1].$3, modules[i + 1].$4, filtered))
             else
               const Expanded(child: SizedBox()),
           ]),
@@ -1235,9 +1826,12 @@ class _AiPage extends StatelessWidget {
     });
   }
 
-  Widget _moduleCard(BuildContext ctx, AiState aiState, AiModule module, String title, IconData icon, String desc) {
+  Widget _moduleCard(BuildContext ctx, AiState aiState, AiModule module, String title, IconData icon, String desc, List<TradingOrderDto> filtered) {
+    final c = widget.c;
     final loading = aiState.isLoading(module);
     final result = aiState.result(module);
+    // Modules that use orders: show period badge.
+    final usesPeriod = module == AiModule.tradeReview || module == AiModule.patternDetection;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -1248,15 +1842,23 @@ class _AiPage extends StatelessWidget {
           const SizedBox(width: 10),
           Text(title, style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
           const Spacer(),
+          if (usesPeriod) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(4)),
+              child: Text(_period.label, style: TextStyle(color: c.textSecondary, fontSize: 8, fontWeight: FontWeight.w700)),
+            ),
+            const SizedBox(width: 8),
+          ],
           if (loading)
             SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: c.green))
           else
             GestureDetector(
-              onTap: () => _runModule(ctx, module),
+              onTap: () => _runModule(ctx, module, filtered),
               child: MouseRegion(cursor: SystemMouseCursors.click, child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(color: c.green.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
-                child: Text(result != null ? 'RERUN' : 'RUN', style: TextStyle(color: c.green, fontSize: 9, fontWeight: FontWeight.w700)),
+                child: Builder(builder: (ctx) { final t = _T.of(ctx); return Text(result != null ? t.rerun : t.run, style: TextStyle(color: c.green, fontSize: 9, fontWeight: FontWeight.w700)); }),
               )),
             ),
         ]),
@@ -1264,40 +1866,50 @@ class _AiPage extends StatelessWidget {
         Text(desc, style: TextStyle(color: c.textSecondary, fontSize: 11)),
         if (result != null) ...[
           Divider(color: c.border, height: 20),
-          // Timestamp.
-          Text('Updated: ${DateFormat('HH:mm:ss').format(result.timestamp)}', style: TextStyle(color: c.textSecondary.withOpacity(0.5), fontSize: 9)),
+          Builder(builder: (ctx) => Text('${_T.of(ctx).updated}: ${DateFormat('HH:mm:ss').format(result.timestamp)}', style: TextStyle(color: c.textSecondary.withOpacity(0.5), fontSize: 9))),
           const SizedBox(height: 8),
-          // AI response as markdown-like text.
           SelectableText(result.content, style: TextStyle(color: c.textPrimary, fontSize: 12, height: 1.6)),
         ] else if (!loading) ...[
           const SizedBox(height: 16),
-          Center(child: Text('Click RUN to start analysis', style: TextStyle(color: c.textSecondary.withOpacity(0.4), fontSize: 11))),
+          Builder(builder: (ctx) => Center(child: Text(_T.of(ctx).clickRunToStart, style: TextStyle(color: c.textSecondary.withOpacity(0.4), fontSize: 11)))),
         ],
       ]),
     );
   }
 
-  void _runModule(BuildContext ctx, AiModule module) {
+  void _runModule(BuildContext ctx, AiModule module, List<TradingOrderDto> filtered) {
     final ai = ctx.read<AiCubit>();
+    final s = widget.state;
     switch (module) {
       case AiModule.tradeReview:
-        ai.runTradeReview(state.allOrders);
+        ai.runTradeReview(filtered);
       case AiModule.portfolioAdvisor:
-        ai.runPortfolioAdvisor(state.positions);
+        ai.runPortfolioAdvisor(s.positions);
       case AiModule.patternDetection:
-        if (state.analytics != null) ai.runPatternDetection(state.analytics!);
+        if (s.analytics != null) ai.runPatternDetection(s.analytics!);
       case AiModule.riskScore:
-        if (state.analytics != null) ai.runRiskScore(analytics: state.analytics!, positions: state.positions);
+        if (s.analytics != null) ai.runRiskScore(analytics: s.analytics!, positions: s.positions);
+      case AiModule.journalDaily:
+        ai.runJournalDaily(s.allOrders);
+      case AiModule.journalWeekly:
+        ai.runJournalWeekly(s.allOrders);
+      case AiModule.journalAllTime:
+        if (s.analytics != null) ai.runJournalAllTime(s.analytics!);
+      case AiModule.strategyAnalysis:
+        if (s.strategies.isNotEmpty) ai.runStrategyAnalysis(s.strategies.first, s.positions);
+      case AiModule.strategyComparison:
+        ai.runStrategyComparison(s.strategies, s.positions);
     }
   }
 
-  void _runAll(BuildContext ctx) {
+  void _runAll(BuildContext ctx, List<TradingOrderDto> filtered) {
     final ai = ctx.read<AiCubit>();
-    ai.runTradeReview(state.allOrders);
-    if (state.positions.isNotEmpty) ai.runPortfolioAdvisor(state.positions);
-    if (state.analytics != null) {
-      ai.runPatternDetection(state.analytics!);
-      ai.runRiskScore(analytics: state.analytics!, positions: state.positions);
+    final s = widget.state;
+    ai.runTradeReview(filtered);
+    if (s.positions.isNotEmpty) ai.runPortfolioAdvisor(s.positions);
+    if (s.analytics != null) {
+      ai.runPatternDetection(s.analytics!);
+      ai.runRiskScore(analytics: s.analytics!, positions: s.positions);
     }
   }
 }
@@ -1320,9 +1932,9 @@ class _StrategiesPage extends StatelessWidget {
       return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
         Icon(Icons.pie_chart_rounded, size: 48, color: c.textSecondary),
         const SizedBox(height: 12),
-        Text('No strategies yet', style: TextStyle(color: c.textSecondary, fontSize: 16)),
+        Text(_T.of(context).noStrategies, style: TextStyle(color: c.textSecondary, fontSize: 16)),
         const SizedBox(height: 8),
-        Text('Create your first strategy to organize positions', style: TextStyle(color: c.textSecondary, fontSize: 13)),
+        Text(_T.of(context).createFirstStrategy, style: TextStyle(color: c.textSecondary, fontSize: 13)),
       ]));
     }
 
@@ -1347,6 +1959,10 @@ class _StrategiesPage extends StatelessWidget {
         _UnassignedCard(c: c, positions: unassigned, totalValue: totalPortfolioValue),
       ],
 
+      // ── AI Analysis ──
+      const SizedBox(height: 20),
+      _StrategyAiSection(c: c, state: state),
+
       const SizedBox(height: 32),
     ]);
   }
@@ -1366,7 +1982,7 @@ class _OverviewSection extends StatelessWidget {
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16), border: Border.all(color: c.border)),
         child: Column(children: [
-          Text('ALLOCATION', style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1)),
+          Text(_T.of(context).allocation, style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1)),
           const SizedBox(height: 16),
           SizedBox(
             width: 140, height: 140,
@@ -1396,9 +2012,9 @@ class _OverviewSection extends StatelessWidget {
       // Summary cards
       Expanded(child: Column(children: [
         Row(children: [
-          _summaryTile('TOTAL VALUE', '\$${_fmt(totalValue)}', c.textPrimary, c),
+          _summaryTile(_T.of(context).totalValue, '\$${_fmt(totalValue)}', c.textPrimary, c),
           const SizedBox(width: 12),
-          _summaryTile('STRATEGIES', '${strategies.length}', c.textPrimary, c),
+          _summaryTile(_T.of(context).navStrategies, '${strategies.length}', c.textPrimary, c),
         ]),
         const SizedBox(height: 12),
         Row(children: [
@@ -1508,7 +2124,7 @@ class _StrategyCard extends StatelessWidget {
             ]));
           }),
         ] else
-          Padding(padding: const EdgeInsets.only(top: 12), child: Text('No positions assigned', style: TextStyle(color: c.textSecondary, fontSize: 12))),
+          Padding(padding: const EdgeInsets.only(top: 12), child: Builder(builder: (ctx) => Text(_T.of(ctx).noPositionsAssigned, style: TextStyle(color: c.textSecondary, fontSize: 12)))),
       ]),
     );
   }
@@ -1531,7 +2147,7 @@ class _UnassignedCard extends StatelessWidget {
         Row(children: [
           Icon(Icons.help_outline_rounded, size: 18, color: c.textSecondary),
           const SizedBox(width: 10),
-          Text('UNASSIGNED', style: TextStyle(color: c.textSecondary, fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+          Builder(builder: (ctx) => Text(_T.of(ctx).unassigned, style: TextStyle(color: c.textSecondary, fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 0.5))),
           const Spacer(),
           Text('${pct.toStringAsFixed(0)}% · \$${_fmt(unValue)}', style: TextStyle(color: c.textSecondary, fontSize: 13)),
         ]),
@@ -1593,9 +2209,8 @@ class _PieChartPainter extends CustomPainter {
 // CSV DOWNLOAD (web)
 // =============================================================================
 
-void _downloadFile(String filename, String content) {
-  final bytes = utf8.encode(content);
-  final blob = html.Blob([bytes], 'text/csv');
+void _downloadXlsx(String filename, List<int> bytes) {
+  final blob = html.Blob([bytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   final url = html.Url.createObjectUrlFromBlob(blob);
   html.AnchorElement(href: url)
     ..setAttribute('download', filename)
@@ -1725,6 +2340,705 @@ class CtaBanner extends StatelessWidget {
       ]),
     );
   }
+}
+
+// =============================================================================
+// JOURNAL PAGE
+// =============================================================================
+
+enum _JournalTab { daily, weekly, allTime }
+
+class _JournalPage extends StatefulWidget {
+  const _JournalPage({required this.c, required this.state});
+  final AppColors c;
+  final TradingAnalyticsState state;
+  @override
+  State<_JournalPage> createState() => _JournalPageState();
+}
+
+class _JournalPageState extends State<_JournalPage> {
+  _JournalTab _tab = _JournalTab.allTime;
+
+  AiModule get _module => switch (_tab) {
+    _JournalTab.daily   => AiModule.journalDaily,
+    _JournalTab.weekly  => AiModule.journalWeekly,
+    _JournalTab.allTime => AiModule.journalAllTime,
+  };
+
+  void _run(BuildContext ctx) {
+    final ai = ctx.read<AiCubit>();
+    final s = widget.state;
+    switch (_tab) {
+      case _JournalTab.daily:
+        ai.runJournalDaily(s.allOrders);
+      case _JournalTab.weekly:
+        ai.runJournalWeekly(s.allOrders);
+      case _JournalTab.allTime:
+        if (s.analytics != null) ai.runJournalAllTime(s.analytics!);
+    }
+  }
+
+  /// Auto-run allTime on first open if no result yet.
+  void _autoRunIfNeeded(BuildContext ctx, AiState aiState) {
+    if (_tab == _JournalTab.allTime &&
+        !aiState.isLoading(AiModule.journalAllTime) &&
+        aiState.result(AiModule.journalAllTime) == null) {
+      _run(ctx);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.c;
+    final t = _T.of(context);
+
+    return BlocBuilder<AiCubit, AiState>(builder: (ctx, aiState) {
+      final loading = aiState.isLoading(_module);
+      final result = aiState.result(_module);
+
+      // Auto-generate allTime on first open
+      WidgetsBinding.instance.addPostFrameCallback((_) => _autoRunIfNeeded(ctx, aiState));
+
+      return ListView(padding: const EdgeInsets.all(24), children: [
+        // Header
+        Row(children: [
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(t.journalTitle, style: TextStyle(color: c.textPrimary, fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+            const SizedBox(height: 4),
+            Text(t.journalSubtitle, style: TextStyle(color: c.textSecondary, fontSize: 13)),
+          ]),
+        ]),
+        const SizedBox(height: 24),
+
+        // Tab + Generate button row
+        Row(children: [
+          // Tabs
+          Container(
+            decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(10)),
+            child: Row(mainAxisSize: MainAxisSize.min, children: _JournalTab.values.map((tab) {
+              final active = tab == _tab;
+              final label = switch (tab) {
+                _JournalTab.daily   => t.journalDaily,
+                _JournalTab.weekly  => t.journalWeekly,
+                _JournalTab.allTime => t.journalAllTime,
+              };
+              return GestureDetector(
+                onTap: () {
+                  setState(() => _tab = tab);
+                  // Auto-run allTime if switching to it and no result
+                  if (tab == _JournalTab.allTime) {
+                    final aiState = ctx.read<AiCubit>().state;
+                    _autoRunIfNeeded(ctx, aiState);
+                  }
+                },
+                child: MouseRegion(cursor: SystemMouseCursors.click, child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                  decoration: BoxDecoration(
+                    color: active ? c.textPrimary : Colors.transparent,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Text(label, style: TextStyle(
+                    color: active ? c.bg : c.textSecondary,
+                    fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.3,
+                  )),
+                )),
+              );
+            }).toList()),
+          ),
+          const SizedBox(width: 12),
+          // Generate button
+          GestureDetector(
+            onTap: loading ? null : () => _run(ctx),
+            child: MouseRegion(cursor: loading ? MouseCursor.defer : SystemMouseCursors.click, child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
+              decoration: BoxDecoration(
+                color: c.green.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: c.green.withValues(alpha: 0.3)),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                if (loading)
+                  SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: c.green))
+                else
+                  Icon(Icons.auto_awesome_rounded, size: 14, color: c.green),
+                const SizedBox(width: 8),
+                Text(_tab == _JournalTab.allTime
+                  ? t.journalRegenerate
+                  : (result != null ? t.journalRegenerate : t.journalGenerate),
+                  style: TextStyle(color: c.green, fontSize: 11, fontWeight: FontWeight.w700)),
+              ]),
+            )),
+          ),
+        ]),
+        const SizedBox(height: 20),
+
+        // Description card (shown when no result)
+        if (result == null && !loading)
+          _JournalEmptyCard(tab: _tab, c: c, t: t)
+        else if (loading)
+          _JournalLoadingCard(c: c)
+        else
+          _JournalResultCard(result: result!, c: c, t: t),
+      ]);
+    });
+  }
+}
+
+class _JournalEmptyCard extends StatelessWidget {
+  const _JournalEmptyCard({required this.tab, required this.c, required this.t});
+  final _JournalTab tab; final AppColors c; final _T t;
+
+  @override
+  Widget build(BuildContext context) {
+    final desc = switch (tab) {
+      _JournalTab.daily   => t.journalDailyDesc,
+      _JournalTab.weekly  => t.journalWeeklyDesc,
+      _JournalTab.allTime => t.journalAllTimeDesc,
+    };
+    final icon = switch (tab) {
+      _JournalTab.daily   => Icons.today_rounded,
+      _JournalTab.weekly  => Icons.date_range_rounded,
+      _JournalTab.allTime => Icons.history_edu_rounded,
+    };
+    return Container(
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16), border: Border.all(color: c.border)),
+      child: Column(children: [
+        Icon(icon, size: 48, color: c.textSecondary.withValues(alpha: 0.4)),
+        const SizedBox(height: 16),
+        Text(desc, textAlign: TextAlign.center, style: TextStyle(color: c.textSecondary, fontSize: 14, height: 1.5)),
+        const SizedBox(height: 20),
+        Text(t.journalNoData, style: TextStyle(color: c.textSecondary.withValues(alpha: 0.5), fontSize: 12)),
+      ]),
+    );
+  }
+}
+
+class _JournalLoadingCard extends StatelessWidget {
+  const _JournalLoadingCard({required this.c});
+  final AppColors c;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(40),
+    decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16), border: Border.all(color: c.border)),
+    child: Column(children: [
+      SizedBox(width: 32, height: 32, child: CircularProgressIndicator(strokeWidth: 2.5, color: c.green)),
+      const SizedBox(height: 16),
+      Text('AI пишет дневник...', style: TextStyle(color: c.textSecondary, fontSize: 13)),
+    ]),
+  );
+}
+
+class _JournalResultCard extends StatelessWidget {
+  const _JournalResultCard({required this.result, required this.c, required this.t});
+  final AiAnalysis result; final AppColors c; final _T t;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(24),
+    decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16), border: Border.all(color: c.border)),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Icon(Icons.auto_awesome_rounded, size: 14, color: c.green),
+        const SizedBox(width: 6),
+        Text('${t.journalUpdated}: ${DateFormat('dd MMM, HH:mm').format(result.timestamp)}',
+          style: TextStyle(color: c.textSecondary.withValues(alpha: 0.6), fontSize: 10)),
+      ]),
+      Divider(color: c.border, height: 20),
+      SelectableText(result.content,
+        style: TextStyle(color: c.textPrimary, fontSize: 13, height: 1.7, letterSpacing: 0.1)),
+    ]),
+  );
+}
+
+// =============================================================================
+// STRATEGY AI SECTION (added to _StrategiesPage)
+// =============================================================================
+
+class _StrategyAiSection extends StatelessWidget {
+  const _StrategyAiSection({required this.c, required this.state});
+  final AppColors c;
+  final TradingAnalyticsState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = _T.of(context);
+    if (state.strategies.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(12), border: Border.all(color: c.border)),
+        child: Row(children: [
+          Icon(Icons.auto_awesome_rounded, size: 16, color: c.textSecondary),
+          const SizedBox(width: 10),
+          Text(t.strategyAiNoStrategies, style: TextStyle(color: c.textSecondary, fontSize: 12)),
+        ]),
+      );
+    }
+
+    return BlocBuilder<AiCubit, AiState>(builder: (ctx, aiState) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // Row: Analysis card + Comparison card
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Strategy Analysis
+          Expanded(child: _aiCard(
+            ctx: ctx, aiState: aiState,
+            module: AiModule.strategyAnalysis,
+            title: t.strategyAiAnalysis,
+            desc: t.strategyAiAnalysisDesc,
+            icon: Icons.analytics_rounded,
+            onRun: () => ctx.read<AiCubit>().runStrategyAnalysis(
+              state.strategies.first, state.positions,
+            ),
+            onRerun: () => ctx.read<AiCubit>().runStrategyAnalysis(
+              state.strategies.first, state.positions,
+            ),
+            t: t,
+          )),
+          const SizedBox(width: 12),
+          // Strategy Comparison
+          Expanded(child: _aiCard(
+            ctx: ctx, aiState: aiState,
+            module: AiModule.strategyComparison,
+            title: t.strategyAiComparison,
+            desc: t.strategyAiComparisonDesc,
+            icon: Icons.compare_arrows_rounded,
+            onRun: () => ctx.read<AiCubit>().runStrategyComparison(
+              state.strategies, state.positions,
+            ),
+            onRerun: () => ctx.read<AiCubit>().runStrategyComparison(
+              state.strategies, state.positions,
+            ),
+            t: t,
+          )),
+        ]),
+      ]);
+    });
+  }
+
+  Widget _aiCard({
+    required BuildContext ctx,
+    required AiState aiState,
+    required AiModule module,
+    required String title,
+    required String desc,
+    required IconData icon,
+    required VoidCallback onRun,
+    required VoidCallback onRerun,
+    required _T t,
+  }) {
+    final loading = aiState.isLoading(module);
+    final result = aiState.result(module);
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(12), border: Border.all(color: c.border)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(icon, size: 16, color: c.green),
+          const SizedBox(width: 8),
+          Expanded(child: Text(title, style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.3))),
+          if (loading)
+            SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: c.green))
+          else
+            GestureDetector(
+              onTap: result != null ? onRerun : onRun,
+              child: MouseRegion(cursor: SystemMouseCursors.click, child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(color: c.green.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
+                child: Text(result != null ? t.strategyAiRerun : t.strategyAiRun,
+                  style: TextStyle(color: c.green, fontSize: 9, fontWeight: FontWeight.w700)),
+              )),
+            ),
+        ]),
+        const SizedBox(height: 6),
+        Text(desc, style: TextStyle(color: c.textSecondary, fontSize: 11)),
+        if (result != null) ...[
+          Divider(color: c.border, height: 20),
+          Text('${t.journalUpdated}: ${DateFormat('HH:mm').format(result.timestamp)}',
+            style: TextStyle(color: c.textSecondary.withValues(alpha: 0.5), fontSize: 9)),
+          const SizedBox(height: 8),
+          SelectableText(result.content,
+            style: TextStyle(color: c.textPrimary, fontSize: 12, height: 1.6)),
+        ] else if (!loading) ...[
+          const SizedBox(height: 12),
+          Center(child: Text(t.strategyAiClickRun,
+            style: TextStyle(color: c.textSecondary.withValues(alpha: 0.4), fontSize: 11))),
+        ],
+      ]),
+    );
+  }
+}
+
+// =============================================================================
+// TRANSLATIONS — Trading Analytics module
+// =============================================================================
+
+class _T {
+  const _T._({
+    required this.navDashboard,
+    required this.navPortfolio,
+    required this.navStrategies,
+    required this.navOrders,
+    required this.navAiInsights,
+    required this.navLogout,
+    required this.navStaging,
+    required this.headerPortfolio,
+    required this.headerStrategies,
+    required this.headerOrderHistory,
+    required this.headerAiInsights,
+    required this.statusLive,
+    required this.trades,
+    required this.orders,
+    required this.keyMetrics,
+    required this.equityCurve,
+    required this.currentValue,
+    required this.winRate,
+    required this.wins,
+    required this.losses,
+    required this.streaks,
+    required this.winStreak,
+    required this.lossStreak,
+    required this.bestDay,
+    required this.worstDay,
+    required this.topTickers,
+    required this.longVsShort,
+    required this.positions,
+    required this.avg,
+    required this.perTrade,
+    required this.plByWeekday,
+    required this.plByHour,
+    required this.afterHoursRestricted,
+    required this.back,
+    required this.noTradesThisDay,
+    required this.monthlySummary,
+    required this.month,
+    required this.avgPerTrade,
+    required this.winPct,
+    required this.avgHoldTime,
+    required this.avgHoldTimeDesc,
+    required this.overall,
+    required this.winsOnly,
+    required this.lossesOnly,
+    required this.plByPositionSize,
+    required this.sizeRange,
+    required this.rrDistribution,
+    required this.tradingAnalytics,
+    required this.noOpenPositions,
+    required this.refresh,
+    required this.exportExcel,
+    required this.symbol,
+    required this.chart30d,
+    required this.qty,
+    required this.avgPrice,
+    required this.current,
+    required this.mktValue,
+    required this.plDollar,
+    required this.plPercent,
+    required this.totalValue,
+    required this.noOrdersFound,
+    required this.date,
+    required this.side,
+    required this.price,
+    required this.status,
+    required this.loadingData,
+    required this.sdelek,
+    required this.runAll,
+    required this.clickRunToStart,
+    required this.updated,
+    required this.rerun,
+    required this.run,
+    required this.noStrategies,
+    required this.createFirstStrategy,
+    required this.allocation,
+    required this.noPositionsAssigned,
+    required this.unassigned,
+    required this.errorTitle,
+    required this.errorBack,
+    required this.quickSignIn,
+    required this.saved,
+    required this.totalPositions,
+    // Journal
+    required this.navJournal,
+    required this.headerJournal,
+    required this.journalTitle,
+    required this.journalSubtitle,
+    required this.journalDaily,
+    required this.journalWeekly,
+    required this.journalAllTime,
+    required this.journalDailyDesc,
+    required this.journalWeeklyDesc,
+    required this.journalAllTimeDesc,
+    required this.journalGenerate,
+    required this.journalRegenerate,
+    required this.journalNoData,
+    required this.journalUpdated,
+    // Strategy AI
+    required this.strategyAiAnalysis,
+    required this.strategyAiComparison,
+    required this.strategyAiAnalysisDesc,
+    required this.strategyAiComparisonDesc,
+    required this.strategyAiRun,
+    required this.strategyAiRerun,
+    required this.strategyAiRunAll,
+    required this.strategyAiClickRun,
+    required this.strategyAiNoStrategies,
+  });
+
+  final String navDashboard, navPortfolio, navStrategies, navOrders, navAiInsights, navLogout, navStaging;
+  final String headerPortfolio, headerStrategies, headerOrderHistory, headerAiInsights;
+  final String statusLive, trades, orders;
+  final String keyMetrics, equityCurve, currentValue;
+  final String winRate, wins, losses;
+  final String streaks, winStreak, lossStreak, bestDay, worstDay;
+  final String topTickers;
+  final String longVsShort, positions, avg, perTrade;
+  final String plByWeekday, plByHour, afterHoursRestricted;
+  final String back, noTradesThisDay;
+  final String monthlySummary, month, avgPerTrade, winPct;
+  final String avgHoldTime, avgHoldTimeDesc, overall, winsOnly, lossesOnly;
+  final String plByPositionSize, sizeRange;
+  final String rrDistribution;
+  final String tradingAnalytics;
+  final String noOpenPositions, refresh, exportExcel;
+  final String symbol, chart30d, qty, avgPrice, current, mktValue, plDollar, plPercent;
+  final String totalValue;
+  final String noOrdersFound, date, side, price, status;
+  final String loadingData, sdelek, runAll, clickRunToStart, updated, rerun, run;
+  final String noStrategies, createFirstStrategy, allocation, noPositionsAssigned, unassigned;
+  final String errorTitle, errorBack;
+  final String quickSignIn, saved;
+  final String totalPositions;
+  // Journal
+  final String navJournal, headerJournal, journalTitle, journalSubtitle;
+  final String journalDaily, journalWeekly, journalAllTime;
+  final String journalDailyDesc, journalWeeklyDesc, journalAllTimeDesc;
+  final String journalGenerate, journalRegenerate, journalNoData, journalUpdated;
+  // Strategy AI
+  final String strategyAiAnalysis, strategyAiComparison;
+  final String strategyAiAnalysisDesc, strategyAiComparisonDesc;
+  final String strategyAiRun, strategyAiRerun, strategyAiRunAll, strategyAiClickRun, strategyAiNoStrategies;
+
+  static _T of(BuildContext context) {
+    final locale = AppThemeScope.of(context).locale;
+    return locale == 'ru' ? _ru : _en;
+  }
+
+  static const _ru = _T._(
+    navDashboard: 'ДАШБОРД',
+    navPortfolio: 'ПОРТФЕЛЬ',
+    navStrategies: 'СТРАТЕГИИ',
+    navOrders: 'ОРДЕРА',
+    navAiInsights: 'AI ИНСАЙТЫ',
+    navLogout: 'ВЫХОД',
+    navStaging: 'STAGING',
+    headerPortfolio: 'ПОРТФЕЛЬ',
+    headerStrategies: 'СТРАТЕГИИ',
+    headerOrderHistory: 'ИСТОРИЯ ОРДЕРОВ',
+    headerAiInsights: 'AI ИНСАЙТЫ',
+    statusLive: 'РЫНОК ПОДКЛЮЧЁН',
+    trades: 'сделок',
+    orders: 'ордеров',
+    keyMetrics: 'КЛЮЧЕВЫЕ МЕТРИКИ',
+    equityCurve: 'КРИВАЯ КАПИТАЛА',
+    currentValue: 'ТЕКУЩЕЕ ЗНАЧЕНИЕ',
+    winRate: 'ПРОЦЕНТ ПОБЕД',
+    wins: 'ПОБЕД',
+    losses: 'УБЫТКОВ',
+    streaks: 'СЕРИИ',
+    winStreak: 'СЕРИЯ ПОБЕД',
+    lossStreak: 'СЕРИЯ УБЫТКОВ',
+    bestDay: 'ЛУЧШИЙ ДЕНЬ',
+    worstDay: 'ХУДШИЙ ДЕНЬ',
+    topTickers: 'ТОП ТИКЕРЫ',
+    longVsShort: 'ЛОНГ vs ШОРТ',
+    positions: 'ПОЗИЦИЙ',
+    avg: 'avg',
+    perTrade: '/сд',
+    plByWeekday: 'P/L ПО ДНЯМ НЕДЕЛИ',
+    plByHour: 'P/L ПО ЧАСАМ (РЫНОК)',
+    afterHoursRestricted: 'ВНЕТОРГОВЫЕ ДАННЫЕ ОГРАНИЧЕНЫ',
+    back: 'НАЗАД',
+    noTradesThisDay: 'Сделок в этот день нет',
+    monthlySummary: 'ПОМЕСЯЧНАЯ СВОДКА',
+    month: 'МЕСЯЦ',
+    avgPerTrade: 'СРЕД/СД',
+    winPct: 'WIN%',
+    avgHoldTime: 'СРЕДНЕЕ ВРЕМЯ УДЕРЖАНИЯ',
+    avgHoldTimeDesc: 'Сколько в среднем держите позицию',
+    overall: 'В ЦЕЛОМ',
+    winsOnly: 'ТОЛЬКО ПРИБЫЛЬНЫЕ',
+    lossesOnly: 'ТОЛЬКО УБЫТОЧНЫЕ',
+    plByPositionSize: 'P/L ПО РАЗМЕРУ ПОЗИЦИИ (акций)',
+    sizeRange: 'РАЗМЕР',
+    rrDistribution: 'РАСПРЕДЕЛЕНИЕ R/R',
+    tradingAnalytics: 'Торговая аналитика',
+    noOpenPositions: 'Нет открытых позиций',
+    refresh: 'Обновить',
+    exportExcel: 'ЭКСПОРТ',
+    symbol: 'ТИКЕР',
+    chart30d: 'ГРАФИК 30Д',
+    qty: 'КОЛ-ВО',
+    avgPrice: 'СРЕД ЦЕНА',
+    current: 'ТЕКУЩАЯ',
+    mktValue: 'СТОИМОСТЬ',
+    plDollar: 'P/L \$',
+    plPercent: 'P/L %',
+    totalValue: 'ОБЩАЯ СТОИМОСТЬ',
+    noOrdersFound: 'Ордера не найдены',
+    date: 'ДАТА',
+    side: 'НАПРАВЛЕНИЕ',
+    price: 'ЦЕНА',
+    status: 'СТАТУС',
+    loadingData: 'Загрузка данных...',
+    sdelek: 'сделок',
+    runAll: 'ЗАПУСТИТЬ ВСЁ',
+    clickRunToStart: 'Нажмите RUN для запуска анализа',
+    updated: 'Обновлено',
+    rerun: 'ПЕРЕЗАПУСК',
+    run: 'ЗАПУСК',
+    noStrategies: 'Нет стратегий',
+    createFirstStrategy: 'Создайте первую стратегию для организации позиций',
+    allocation: 'АЛЛОКАЦИЯ',
+    noPositionsAssigned: 'Нет назначенных позиций',
+    unassigned: 'НЕ НАЗНАЧЕНО',
+    errorTitle: 'Ошибка',
+    errorBack: 'Назад',
+    quickSignIn: 'Быстрый вход',
+    saved: 'Сохранено',
+    totalPositions: 'ИТОГО',
+    navJournal: 'ДНЕВНИК',
+    headerJournal: 'ТОРГОВЫЙ ДНЕВНИК',
+    journalTitle: 'Торговый дневник',
+    journalSubtitle: 'AI анализирует твою торговлю и пишет персональный дневник',
+    journalDaily: 'СЕГОДНЯ',
+    journalWeekly: 'НЕДЕЛЯ',
+    journalAllTime: 'ВСЁ ВРЕМЯ',
+    journalDailyDesc: 'Что ты торговал сегодня, что пошло хорошо и плохо, один вывод на завтра',
+    journalWeeklyDesc: 'Паттерны недели, лучший/худший день, фокус на следующую неделю',
+    journalAllTimeDesc: 'Твой торговый профиль, системные слабости, путь к стабильной прибыли',
+    journalGenerate: 'СГЕНЕРИРОВАТЬ',
+    journalRegenerate: 'ОБНОВИТЬ',
+    journalNoData: 'Нажми кнопку выше чтобы сгенерировать запись',
+    journalUpdated: 'Обновлено',
+    strategyAiAnalysis: 'АНАЛИЗ СТРАТЕГИИ',
+    strategyAiComparison: 'СРАВНЕНИЕ СТРАТЕГИЙ',
+    strategyAiAnalysisDesc: 'AI оценит эффективность выбранной стратегии и даст рекомендации',
+    strategyAiComparisonDesc: 'Сравни все стратегии и получи рекомендации по перераспределению капитала',
+    strategyAiRun: 'ЗАПУСК',
+    strategyAiRerun: 'ОБНОВИТЬ',
+    strategyAiRunAll: 'АНАЛИЗ ВСЕХ',
+    strategyAiClickRun: 'Нажми ЗАПУСК для анализа',
+    strategyAiNoStrategies: 'Создайте стратегии чтобы запустить AI сравнение',
+  );
+
+  static const _en = _T._(
+    navDashboard: 'DASHBOARD',
+    navPortfolio: 'PORTFOLIO',
+    navStrategies: 'STRATEGIES',
+    navOrders: 'ORDERS',
+    navAiInsights: 'AI INSIGHTS',
+    navLogout: 'LOGOUT',
+    navStaging: 'STAGING',
+    headerPortfolio: 'PORTFOLIO',
+    headerStrategies: 'STRATEGIES',
+    headerOrderHistory: 'ORDER HISTORY',
+    headerAiInsights: 'AI INSIGHTS',
+    statusLive: 'LIVE MARKET CONNECTED',
+    trades: 'trades',
+    orders: 'orders',
+    keyMetrics: 'KEY METRICS',
+    equityCurve: 'EQUITY CURVE',
+    currentValue: 'CURRENT VALUE',
+    winRate: 'WIN RATE',
+    wins: 'WINS',
+    losses: 'LOSSES',
+    streaks: 'STREAKS',
+    winStreak: 'WIN STREAK',
+    lossStreak: 'LOSS STREAK',
+    bestDay: 'BEST DAY',
+    worstDay: 'WORST DAY',
+    topTickers: 'TOP TICKERS',
+    longVsShort: 'LONG VS SHORT',
+    positions: 'POSITIONS',
+    avg: 'avg',
+    perTrade: '/tr',
+    plByWeekday: 'P/L BY WEEKDAY',
+    plByHour: 'P/L BY HOUR (MARKET)',
+    afterHoursRestricted: 'AFTER-HOURS DATA RESTRICTED',
+    back: 'BACK',
+    noTradesThisDay: 'No trades this day',
+    monthlySummary: 'MONTHLY SUMMARY',
+    month: 'MONTH',
+    avgPerTrade: 'AVG/TRADE',
+    winPct: 'WIN%',
+    avgHoldTime: 'AVG HOLD TIME',
+    avgHoldTimeDesc: 'How long you hold a position on average',
+    overall: 'OVERALL',
+    winsOnly: 'WINS ONLY',
+    lossesOnly: 'LOSSES ONLY',
+    plByPositionSize: 'P/L BY POSITION SIZE (SHARES)',
+    sizeRange: 'SIZE RANGE',
+    rrDistribution: 'R/R DISTRIBUTION',
+    tradingAnalytics: 'Trading Analytics',
+    noOpenPositions: 'No open positions',
+    refresh: 'Refresh',
+    exportExcel: 'EXPORT',
+    symbol: 'SYMBOL',
+    chart30d: '30D CHART',
+    qty: 'QTY',
+    avgPrice: 'AVG PRICE',
+    current: 'CURRENT',
+    mktValue: 'MKT VALUE',
+    plDollar: 'P/L \$',
+    plPercent: 'P/L %',
+    totalValue: 'TOTAL VALUE',
+    noOrdersFound: 'No orders found',
+    date: 'DATE',
+    side: 'SIDE',
+    price: 'PRICE',
+    status: 'STATUS',
+    loadingData: 'Loading trading data...',
+    sdelek: 'trades',
+    runAll: 'RUN ALL',
+    clickRunToStart: 'Click RUN to start analysis',
+    updated: 'Updated',
+    rerun: 'RERUN',
+    run: 'RUN',
+    noStrategies: 'No strategies yet',
+    createFirstStrategy: 'Create your first strategy to organize positions',
+    allocation: 'ALLOCATION',
+    noPositionsAssigned: 'No positions assigned',
+    unassigned: 'UNASSIGNED',
+    errorTitle: 'Error',
+    errorBack: 'Back',
+    quickSignIn: 'Quick Sign In',
+    saved: 'Saved',
+    totalPositions: 'TOTAL',
+    navJournal: 'JOURNAL',
+    headerJournal: 'TRADING JOURNAL',
+    journalTitle: 'Trading Journal',
+    journalSubtitle: 'AI analyzes your trading and writes a personal journal entry',
+    journalDaily: 'TODAY',
+    journalWeekly: 'THIS WEEK',
+    journalAllTime: 'ALL TIME',
+    journalDailyDesc: 'What you traded today, what went well and wrong, one takeaway for tomorrow',
+    journalWeeklyDesc: 'Weekly patterns, best/worst day, focus for next week',
+    journalAllTimeDesc: 'Your trading profile, systemic weaknesses, path to consistent profitability',
+    journalGenerate: 'GENERATE',
+    journalRegenerate: 'REGENERATE',
+    journalNoData: 'Click the button above to generate this journal entry',
+    journalUpdated: 'Updated',
+    strategyAiAnalysis: 'STRATEGY ANALYSIS',
+    strategyAiComparison: 'COMPARE STRATEGIES',
+    strategyAiAnalysisDesc: 'AI evaluates the strategy effectiveness and gives recommendations',
+    strategyAiComparisonDesc: 'Compare all strategies and get capital reallocation recommendations',
+    strategyAiRun: 'RUN',
+    strategyAiRerun: 'RERUN',
+    strategyAiRunAll: 'ANALYZE ALL',
+    strategyAiClickRun: 'Click RUN to start analysis',
+    strategyAiNoStrategies: 'Create strategies to enable AI comparison',
+  );
 }
 
 // =============================================================================

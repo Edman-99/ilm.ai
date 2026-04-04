@@ -13,7 +13,7 @@ import 'trading_repository.dart';
 // ── State ──
 
 enum TradingAnalyticsStatus { unauthenticated, loading, loaded, error }
-enum TradingPage { dashboard, portfolio, strategies, orders, ai }
+enum TradingPage { dashboard, portfolio, strategies, orders, ai, journal }
 
 class TradingAnalyticsState extends Equatable {
   const TradingAnalyticsState({
