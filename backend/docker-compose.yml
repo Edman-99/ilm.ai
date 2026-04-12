@@ -45,7 +45,6 @@ services:
     environment:
       DATABASE_URL: postgresql://trading:trading@postgres:5432/trading
       CLAUDE_API_KEY: ${CLAUDE_API_KEY}
-      FMP_API_KEY: ${FMP_API_KEY}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-in-production}
       AUTH_BACKEND_URL: ${AUTH_BACKEND_URL:-https://app12-us-sw.ivlk.io}
       ALPACA_SANDBOX: ${ALPACA_SANDBOX:-true}
