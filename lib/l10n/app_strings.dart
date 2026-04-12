@@ -91,6 +91,7 @@ class AppStrings {
     required this.tradingCtaSubtitle,
     required this.tradingCtaButton,
     required this.tradingDemoLabel,
+    required this.tradingPassword,
     required this.investlinkUrl,
     // Lead form
     required this.leadTitle,
@@ -193,6 +194,7 @@ class AppStrings {
   final String tradingCtaSubtitle;
   final String tradingCtaButton;
   final String tradingDemoLabel;
+  final String tradingPassword;
   final String investlinkUrl;
 
   // Lead form
@@ -351,6 +353,7 @@ class AppStrings {
     tradingCtaSubtitle: 'Комиссия от \$0 · Доступ к 5000+ акций · AI аналитика',
     tradingCtaButton: 'Открыть счёт бесплатно',
     tradingDemoLabel: 'DEMO',
+    tradingPassword: 'Пароль',
     investlinkUrl: 'https://investlink.kz/',
     leadTitle: 'Получите AI-анализ',
     leadSubtitle: 'Заполните форму и получите профессиональный отчёт за 30 секунд',
@@ -504,6 +507,7 @@ class AppStrings {
     tradingCtaSubtitle: 'Commission from \$0 · Access to 5000+ stocks · AI analytics',
     tradingCtaButton: 'Open Account for Free',
     tradingDemoLabel: 'DEMO',
+    tradingPassword: 'Password',
     investlinkUrl: 'https://investlink.io/',
     leadTitle: 'Get AI Analysis',
     leadSubtitle: 'Fill in the form and get a professional report in 30 seconds',

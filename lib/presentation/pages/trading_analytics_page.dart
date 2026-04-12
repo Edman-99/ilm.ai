@@ -1091,6 +1091,7 @@ class _LoginForm extends StatefulWidget {
 
 class _LoginFormState extends State<_LoginForm> {
   bool _showLogin = false;
+  bool _obscurePassword = true;
 
   Future<void> _onDemo() async {
     // Collect lead before demo.
@@ -1174,7 +1175,7 @@ class _LoginFormState extends State<_LoginForm> {
                     // Login fields
                     TextField(controller: widget.emailCtrl, decoration: InputDecoration(hintText: s.leadEmail, prefixIcon: Icon(Icons.email_outlined, color: c.textSecondary, size: 18))),
                     const SizedBox(height: 12),
-                    TextField(controller: widget.passwordCtrl, obscureText: true, onSubmitted: (_) => _onLogin(), decoration: InputDecoration(hintText: s.leadEmail, prefixIcon: Icon(Icons.lock_outlined, color: c.textSecondary, size: 18))),
+                    TextField(controller: widget.passwordCtrl, obscureText: _obscurePassword, onSubmitted: (_) => _onLogin(), decoration: InputDecoration(hintText: s.tradingPassword, prefixIcon: Icon(Icons.lock_outlined, color: c.textSecondary, size: 18), suffixIcon: IconButton(icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: c.textSecondary, size: 18), onPressed: () => setState(() => _obscurePassword = !_obscurePassword)))),
                     const SizedBox(height: 16),
                     SizedBox(width: double.infinity, height: 46, child: ElevatedButton(onPressed: _onLogin, child: Text(state.hasSavedCredentials ? _T.of(context).quickSignIn : s.tradingSignIn))),
                     if (state.hasSavedCredentials) ...[const SizedBox(height: 8), Text('${_T.of(context).saved}: ${state.savedEmail}', style: TextStyle(color: c.textSecondary, fontSize: 12))],

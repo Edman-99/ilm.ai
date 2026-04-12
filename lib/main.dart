@@ -26,11 +26,7 @@ class AiStockAnalyzerApp extends StatefulWidget {
 class _AiStockAnalyzerAppState extends State<AiStockAnalyzerApp> {
   // On Vercel (*.vercel.app) use proxy, locally use direct URL.
   static String get _tradingBaseUrl {
-    try {
-      final host = Uri.base.host;
-      if (host.contains('vercel.app') || host.contains('ilmai')) return '/api/proxy';
-    } catch (_) {}
-    return 'https://app12-us-sw.ivlk.io';
+    return 'https://api.ilm-analytics.com/ivlk';
   }
 
   final _themeNotifier = ThemeNotifier();
