@@ -70,9 +70,9 @@ class _TradingAnalyticsPageState extends State<TradingAnalyticsPage> {
             case TradingPage.orders:
               body = _OrdersPage(c: c, state: state);
             case TradingPage.ai:
-              body = _AiPage(c: c, state: state);
+              body = const SizedBox.shrink();
             case TradingPage.journal:
-              body = _JournalPage(c: c, state: state);
+              body = const SizedBox.shrink();
             case TradingPage.dashboard:
               body = _Grid(a: state.analytics!, c: c, wide: wide, orders: state.allOrders);
           }
@@ -119,8 +119,6 @@ class _Sidebar extends StatelessWidget {
         _navBtn(Icons.account_balance_wallet_outlined, _T.of(context).navPortfolio, TradingPage.portfolio, cubit),
         _navBtn(Icons.pie_chart_rounded, _T.of(context).navStrategies, TradingPage.strategies, cubit),
         _navBtn(Icons.receipt_long_rounded, _T.of(context).navOrders, TradingPage.orders, cubit),
-        _navBtn(Icons.auto_awesome_rounded, _T.of(context).navAiInsights, TradingPage.ai, cubit),
-        _navBtn(Icons.menu_book_rounded, _T.of(context).navJournal, TradingPage.journal, cubit),
         const Spacer(),
         Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16), child:
           GestureDetector(onTap: () => cubit.logout(), child: _nav(Icons.logout_rounded, _T.of(context).navLogout, false, c)),
@@ -171,7 +169,7 @@ class _Header extends StatelessWidget {
         })
       else
         Builder(builder: (ctx) { final t = _T.of(ctx); return Text(
-          switch (activePage) { TradingPage.portfolio => t.headerPortfolio, TradingPage.strategies => t.headerStrategies, TradingPage.orders => t.headerOrderHistory, TradingPage.ai => t.headerAiInsights, TradingPage.journal => t.headerJournal, _ => '' },
+          switch (activePage) { TradingPage.portfolio => t.headerPortfolio, TradingPage.strategies => t.headerStrategies, TradingPage.orders => t.headerOrderHistory, _ => '' },
           style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.w700, letterSpacing: 1),
         ); }),
       const Spacer(),
@@ -1928,41 +1926,50 @@ class _StrategiesPage extends StatelessWidget {
     final strategies = state.strategies;
     final positions = state.positions;
     final totalPortfolioValue = positions.fold<double>(0, (s, p) => s + p.marketValue);
+    final cubit = context.read<TradingAnalyticsCubit>();
 
-    if (strategies.isEmpty) {
-      return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Icon(Icons.pie_chart_rounded, size: 48, color: c.textSecondary),
-        const SizedBox(height: 12),
-        Text(_T.of(context).noStrategies, style: TextStyle(color: c.textSecondary, fontSize: 16)),
-        const SizedBox(height: 8),
-        Text(_T.of(context).createFirstStrategy, style: TextStyle(color: c.textSecondary, fontSize: 13)),
-      ]));
-    }
-
-    // Positions not assigned to any strategy.
+    // Assigned qty per symbol across all strategies
     final assignedSymbols = strategies.expand((s) => s.symbols).toSet();
     final unassigned = positions.where((p) => !assignedSymbols.contains(p.symbol)).toList();
 
     return ListView(padding: const EdgeInsets.all(20), children: [
-      // ── Overview row: total allocation pie + summary cards ──
-      _OverviewSection(c: c, strategies: strategies, positions: positions, totalValue: totalPortfolioValue),
+      // ── Top bar: header + create button ──
+      Row(children: [
+        Text('STRATEGIES', style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 1)),
+        const Spacer(),
+        _StratCreateBtn(c: c, positions: positions, onCreated: (s) => cubit.createStrategy(s)),
+      ]),
       const SizedBox(height: 20),
 
-      // ── Strategy cards ──
-      for (final strategy in strategies) ...[
-        _StrategyCard(c: c, strategy: strategy, positions: positions, totalValue: totalPortfolioValue),
-        const SizedBox(height: 12),
-      ],
+      if (strategies.isEmpty) ...[
+        _StratEmptyState(c: c, positions: positions, onCreated: (s) => cubit.createStrategy(s)),
+      ] else ...[
+        // ── Overview row: pie chart + summary cards ──
+        _OverviewSection(c: c, strategies: strategies, positions: positions, totalValue: totalPortfolioValue),
+        const SizedBox(height: 20),
 
-      // ── Unassigned positions ──
-      if (unassigned.isNotEmpty) ...[
-        const SizedBox(height: 8),
-        _UnassignedCard(c: c, positions: unassigned, totalValue: totalPortfolioValue),
-      ],
+        // ── Strategy cards ──
+        for (final strategy in strategies) ...[
+          _StrategyCard(
+            c: c, strategy: strategy,
+            positions: positions, totalValue: totalPortfolioValue,
+            allPositions: positions,
+            onEdit: (updated) => cubit.updateStrategy(updated),
+            onDelete: () => cubit.deleteStrategy(strategy.id),
+          ),
+          const SizedBox(height: 12),
+        ],
 
-      // ── AI Analysis ──
-      const SizedBox(height: 20),
-      _StrategyAiSection(c: c, state: state),
+        // ── Unassigned positions ──
+        if (unassigned.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          _UnassignedCard(c: c, positions: unassigned, totalValue: totalPortfolioValue),
+        ],
+
+        // ── AI Analysis ──
+        const SizedBox(height: 20),
+        _StrategyAiSection(c: c, state: state),
+      ],
 
       const SizedBox(height: 32),
     ]);
@@ -2056,10 +2063,89 @@ class _OverviewSection extends StatelessWidget {
   ));
 }
 
+// ── Create button ──
+class _StratCreateBtn extends StatelessWidget {
+  const _StratCreateBtn({required this.c, required this.positions, required this.onCreated});
+  final AppColors c;
+  final List<TradingPositionDto> positions;
+  final void Function(StrategyEntity) onCreated;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: () async {
+      final result = await showDialog<StrategyEntity>(
+        context: context,
+        builder: (_) => _StrategyDialog(c: c, positions: positions),
+      );
+      if (result != null) onCreated(result);
+    },
+    child: MouseRegion(cursor: SystemMouseCursors.click, child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: c.green.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: c.green.withValues(alpha: 0.3)),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(Icons.add_rounded, size: 16, color: c.green),
+        const SizedBox(width: 6),
+        Text('NEW STRATEGY', style: TextStyle(color: c.green, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+      ]),
+    )),
+  );
+}
+
+// ── Empty state ──
+class _StratEmptyState extends StatelessWidget {
+  const _StratEmptyState({required this.c, required this.positions, required this.onCreated});
+  final AppColors c;
+  final List<TradingPositionDto> positions;
+  final void Function(StrategyEntity) onCreated;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(40),
+    decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16), border: Border.all(color: c.border)),
+    child: Column(children: [
+      Icon(Icons.pie_chart_outline_rounded, size: 48, color: c.textSecondary.withValues(alpha: 0.3)),
+      const SizedBox(height: 16),
+      Text('No strategies yet', style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+      const SizedBox(height: 8),
+      Text('Create a strategy to group your positions and track performance separately', textAlign: TextAlign.center, style: TextStyle(color: c.textSecondary, fontSize: 13, height: 1.5)),
+      const SizedBox(height: 24),
+      GestureDetector(
+        onTap: () async {
+          final result = await showDialog<StrategyEntity>(
+            context: context,
+            builder: (_) => _StrategyDialog(c: c, positions: positions),
+          );
+          if (result != null) onCreated(result);
+        },
+        child: MouseRegion(cursor: SystemMouseCursors.click, child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          decoration: BoxDecoration(color: c.green, borderRadius: BorderRadius.circular(10)),
+          child: Text('Create first strategy', style: TextStyle(color: c.isDark ? Colors.black : Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+        )),
+      ),
+    ]),
+  );
+}
+
 // ── Strategy card with positions table ──
 class _StrategyCard extends StatelessWidget {
-  const _StrategyCard({required this.c, required this.strategy, required this.positions, required this.totalValue});
-  final AppColors c; final StrategyEntity strategy; final List<TradingPositionDto> positions; final double totalValue;
+  const _StrategyCard({
+    required this.c, required this.strategy,
+    required this.positions, required this.totalValue,
+    required this.allPositions,
+    required this.onEdit, required this.onDelete,
+  });
+  final AppColors c;
+  final StrategyEntity strategy;
+  final List<TradingPositionDto> positions;
+  final List<TradingPositionDto> allPositions;
+  final double totalValue;
+  final void Function(StrategyEntity) onEdit;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -2069,54 +2155,90 @@ class _StrategyCard extends StatelessWidget {
     final plColor = stratPl >= 0 ? c.green : c.red;
     final plSign = stratPl >= 0 ? '+' : '';
     final allocationPct = totalValue > 0 ? (stratValue / totalValue * 100) : 0.0;
+    final deviation = strategy.allocationDeviation(positions, totalValue);
+    final hasTarget = strategy.targetPct > 0;
 
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(16), border: Border.all(color: c.border)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Header
+        // ── Header ──
         Row(children: [
           Container(
             width: 36, height: 36,
-            decoration: BoxDecoration(color: strategy.color.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(color: strategy.color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
             child: Icon(strategy.icon, size: 18, color: strategy.color),
           ),
           const SizedBox(width: 14),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(strategy.name, style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
-            if (strategy.description.isNotEmpty) Text(strategy.description, style: TextStyle(color: c.textSecondary, fontSize: 12)),
+            Text(strategy.name, style: TextStyle(color: c.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
+            if (strategy.description.isNotEmpty)
+              Text(strategy.description, style: TextStyle(color: c.textSecondary, fontSize: 11)),
           ])),
           // Stats
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
             Text('\$${_fmt(stratValue)}', style: TextStyle(color: c.textPrimary, fontSize: 18, fontWeight: FontWeight.w800)),
             Row(children: [
-              Text('$plSign\$${_fmt(stratPl)}', style: TextStyle(color: plColor, fontSize: 13, fontWeight: FontWeight.w600)),
-              const SizedBox(width: 8),
+              Text('$plSign\$${_fmt(stratPl)}', style: TextStyle(color: plColor, fontSize: 12, fontWeight: FontWeight.w600)),
+              const SizedBox(width: 6),
+              // Allocation badge
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(color: strategy.color.withOpacity(0.12), borderRadius: BorderRadius.circular(6)),
-                child: Text('${allocationPct.toStringAsFixed(0)}%', style: TextStyle(color: strategy.color, fontSize: 11, fontWeight: FontWeight.w700)),
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(color: strategy.color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(6)),
+                child: Text('${allocationPct.toStringAsFixed(0)}%', style: TextStyle(color: strategy.color, fontSize: 10, fontWeight: FontWeight.w700)),
               ),
+              // Deviation badge (if target set)
+              if (hasTarget) ...[
+                const SizedBox(width: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: (deviation.abs() > 5 ? c.red : c.green).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '${deviation >= 0 ? '+' : ''}${deviation.toStringAsFixed(0)}% vs ${strategy.targetPct.toStringAsFixed(0)}% target',
+                    style: TextStyle(color: deviation.abs() > 5 ? c.red : c.green, fontSize: 9, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
             ]),
           ]),
+          const SizedBox(width: 12),
+          // Edit / Delete menu
+          _StratCardMenu(c: c, strategy: strategy, allPositions: allPositions, onEdit: onEdit, onDelete: onDelete),
         ]),
 
+        // ── Notes ──
+        if (strategy.notes.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: c.border.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(8)),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(Icons.notes_rounded, size: 13, color: c.textSecondary),
+              const SizedBox(width: 6),
+              Expanded(child: Text(strategy.notes, style: TextStyle(color: c.textSecondary, fontSize: 11, height: 1.5))),
+            ]),
+          ),
+        ],
+
+        // ── Positions table ──
         if (strategyPositions.isNotEmpty) ...[
-          Divider(color: c.border, height: 28),
-          // Positions table
+          Divider(color: c.border, height: 24),
           ...strategyPositions.map((p) {
             final posPlColor = p.profitCash >= 0 ? c.green : c.red;
             final posSign = p.profitCash >= 0 ? '+' : '';
             return Padding(padding: const EdgeInsets.only(bottom: 8), child: Row(children: [
               Container(
                 width: 32, height: 32,
-                decoration: BoxDecoration(color: c.border.withOpacity(0.4), borderRadius: BorderRadius.circular(8)),
-                child: Center(child: Text(p.symbol.length > 3 ? p.symbol.substring(0, 3) : p.symbol, style: TextStyle(color: c.textPrimary, fontSize: 9, fontWeight: FontWeight.w700))),
+                decoration: BoxDecoration(color: c.border.withValues(alpha: 0.4), borderRadius: BorderRadius.circular(8)),
+                child: Center(child: Text(p.symbol.length > 4 ? p.symbol.substring(0, 4) : p.symbol, style: TextStyle(color: c.textPrimary, fontSize: 9, fontWeight: FontWeight.w700))),
               ),
               const SizedBox(width: 12),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(p.symbol, style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
-                Text('${p.qty.toStringAsFixed(0)} shares · \$${p.avgEntryPrice.toStringAsFixed(2)}', style: TextStyle(color: c.textSecondary, fontSize: 11)),
+                Text('${p.qty % 1 == 0 ? p.qty.toInt() : p.qty.toStringAsFixed(2)} shares · \$${p.avgEntryPrice.toStringAsFixed(2)}', style: TextStyle(color: c.textSecondary, fontSize: 11)),
               ])),
               Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                 Text('\$${_fmt(p.marketValue)}', style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
@@ -2125,10 +2247,337 @@ class _StrategyCard extends StatelessWidget {
             ]));
           }),
         ] else
-          Padding(padding: const EdgeInsets.only(top: 12), child: Builder(builder: (ctx) => Text(_T.of(ctx).noPositionsAssigned, style: TextStyle(color: c.textSecondary, fontSize: 12)))),
+          Padding(padding: const EdgeInsets.only(top: 10), child: Text('No matching positions in portfolio', style: TextStyle(color: c.textSecondary, fontSize: 12))),
       ]),
     );
   }
+}
+
+// ── Card context menu (edit/delete) ──
+class _StratCardMenu extends StatelessWidget {
+  const _StratCardMenu({required this.c, required this.strategy, required this.allPositions, required this.onEdit, required this.onDelete});
+  final AppColors c;
+  final StrategyEntity strategy;
+  final List<TradingPositionDto> allPositions;
+  final void Function(StrategyEntity) onEdit;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) => PopupMenuButton<String>(
+    color: c.card,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide(color: c.border)),
+    icon: Icon(Icons.more_vert_rounded, size: 18, color: c.textSecondary),
+    onSelected: (v) async {
+      if (v == 'edit') {
+        final result = await showDialog<StrategyEntity>(
+          context: context,
+          builder: (_) => _StrategyDialog(c: c, positions: allPositions, existing: strategy),
+        );
+        if (result != null) onEdit(result);
+      } else if (v == 'delete') {
+        final ok = await showDialog<bool>(
+          context: context,
+          builder: (_) => _ConfirmDeleteDialog(c: c, name: strategy.name),
+        );
+        if (ok == true) onDelete();
+      }
+    },
+    itemBuilder: (_) => [
+      PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, size: 15, color: c.textPrimary), const SizedBox(width: 8), Text('Edit', style: TextStyle(color: c.textPrimary, fontSize: 13))])),
+      PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline_rounded, size: 15, color: c.red), const SizedBox(width: 8), Text('Delete', style: TextStyle(color: c.red, fontSize: 13))])),
+    ],
+  );
+}
+
+// ── Confirm delete dialog ──
+class _ConfirmDeleteDialog extends StatelessWidget {
+  const _ConfirmDeleteDialog({required this.c, required this.name});
+  final AppColors c; final String name;
+
+  @override
+  Widget build(BuildContext context) => Dialog(
+    backgroundColor: c.card,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: c.border)),
+    child: Padding(padding: const EdgeInsets.all(28), child: Column(mainAxisSize: MainAxisSize.min, children: [
+      Icon(Icons.delete_outline_rounded, size: 40, color: c.red),
+      const SizedBox(height: 16),
+      Text('Delete "$name"?', style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+      const SizedBox(height: 8),
+      Text('This action cannot be undone.', style: TextStyle(color: c.textSecondary, fontSize: 13)),
+      const SizedBox(height: 24),
+      Row(children: [
+        Expanded(child: GestureDetector(
+          onTap: () => Navigator.of(context).pop(false),
+          child: MouseRegion(cursor: SystemMouseCursors.click, child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(border: Border.all(color: c.border), borderRadius: BorderRadius.circular(10)),
+            child: Center(child: Text('Cancel', style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.w600))),
+          )),
+        )),
+        const SizedBox(width: 12),
+        Expanded(child: GestureDetector(
+          onTap: () => Navigator.of(context).pop(true),
+          child: MouseRegion(cursor: SystemMouseCursors.click, child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(color: c.red, borderRadius: BorderRadius.circular(10)),
+            child: Center(child: Text('Delete', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600))),
+          )),
+        )),
+      ]),
+    ])),
+  );
+}
+
+// ── Create/Edit strategy dialog ──
+class _StrategyDialog extends StatefulWidget {
+  const _StrategyDialog({required this.c, required this.positions, this.existing});
+  final AppColors c;
+  final List<TradingPositionDto> positions;
+  final StrategyEntity? existing;
+  @override State<_StrategyDialog> createState() => _StrategyDialogState();
+}
+
+class _StrategyDialogState extends State<_StrategyDialog> {
+  final _nameCtrl = TextEditingController();
+  final _descCtrl = TextEditingController();
+  final _notesCtrl = TextEditingController();
+  final _targetCtrl = TextEditingController();
+  Color _color = const Color(0xFF6366F1);
+  IconData _icon = Icons.pie_chart_rounded;
+  // symbol → qty controller
+  final Map<String, TextEditingController> _qtyCtrl = {};
+
+  static const _colors = [
+    Color(0xFF6366F1), Color(0xFF22C55E), Color(0xFF3B82F6),
+    Color(0xFFF59E0B), Color(0xFFEF4444), Color(0xFF8B5CF6),
+    Color(0xFF06B6D4), Color(0xFFEC4899),
+  ];
+
+  static const _icons = <String, IconData>{
+    'pie_chart': Icons.pie_chart_rounded,
+    'trending_up': Icons.trending_up_rounded,
+    'shield': Icons.shield_rounded,
+    'star': Icons.star_rounded,
+    'bolt': Icons.bolt_rounded,
+    'verified': Icons.verified_rounded,
+    'bar_chart': Icons.bar_chart_rounded,
+    'savings': Icons.savings_rounded,
+    'public': Icons.public_rounded,
+    'rocket': Icons.rocket_launch_rounded,
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    final e = widget.existing;
+    if (e != null) {
+      _nameCtrl.text = e.name;
+      _descCtrl.text = e.description;
+      _notesCtrl.text = e.notes;
+      _targetCtrl.text = e.targetPct > 0 ? e.targetPct.toStringAsFixed(0) : '';
+      _color = e.color;
+      _icon = e.icon;
+      for (final entry in e.entries) {
+        _qtyCtrl[entry.symbol] = TextEditingController(text: entry.qty % 1 == 0 ? entry.qty.toInt().toString() : entry.qty.toStringAsFixed(2));
+      }
+    }
+    // Pre-fill qty controllers for all available positions
+    for (final p in widget.positions) {
+      _qtyCtrl.putIfAbsent(p.symbol, () => TextEditingController());
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose(); _descCtrl.dispose(); _notesCtrl.dispose(); _targetCtrl.dispose();
+    for (final c in _qtyCtrl.values) c.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (_nameCtrl.text.trim().isEmpty) return;
+    final entries = <StrategyPositionEntry>[];
+    var idCounter = 0;
+    for (final p in widget.positions) {
+      final raw = _qtyCtrl[p.symbol]?.text.trim() ?? '';
+      if (raw.isEmpty) continue;
+      final qty = double.tryParse(raw) ?? 0;
+      if (qty <= 0) continue;
+      entries.add(StrategyPositionEntry(id: idCounter++, symbol: p.symbol, qty: qty.clamp(0.0, p.qty)));
+    }
+    final strategy = (widget.existing ?? StrategyEntity(id: '', name: '', icon: _icon, color: _color))
+        .copyWith(
+          name: _nameCtrl.text.trim(),
+          description: _descCtrl.text.trim(),
+          notes: _notesCtrl.text.trim(),
+          icon: _icon,
+          color: _color,
+          targetPct: double.tryParse(_targetCtrl.text.trim()) ?? 0.0,
+          entries: entries,
+        );
+    Navigator.of(context).pop(strategy);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.c;
+    final isEdit = widget.existing != null;
+    return Dialog(
+      backgroundColor: c.bg,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: c.border)),
+      child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 520, maxHeight: 700), child: Column(children: [
+        // Header
+        Padding(padding: const EdgeInsets.fromLTRB(24, 24, 24, 0), child: Row(children: [
+          Text(isEdit ? 'Edit Strategy' : 'New Strategy', style: TextStyle(color: c.textPrimary, fontSize: 18, fontWeight: FontWeight.w800)),
+          const Spacer(),
+          GestureDetector(onTap: () => Navigator.of(context).pop(), child: Icon(Icons.close_rounded, color: c.textSecondary, size: 20)),
+        ])),
+        Divider(color: c.border, height: 24),
+        // Scrollable body
+        Expanded(child: SingleChildScrollView(padding: const EdgeInsets.symmetric(horizontal: 24), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Name
+          _label(c, 'NAME'),
+          _field(c, _nameCtrl, 'e.g. Growth Tech'),
+          const SizedBox(height: 16),
+
+          // Description
+          _label(c, 'DESCRIPTION'),
+          _field(c, _descCtrl, 'Short description (optional)'),
+          const SizedBox(height: 16),
+
+          // Target allocation
+          _label(c, 'TARGET ALLOCATION %'),
+          _field(c, _targetCtrl, '0', keyboardType: TextInputType.number),
+          const SizedBox(height: 16),
+
+          // Color picker
+          _label(c, 'COLOR'),
+          const SizedBox(height: 8),
+          Wrap(spacing: 8, children: _colors.map((col) => GestureDetector(
+            onTap: () => setState(() => _color = col),
+            child: MouseRegion(cursor: SystemMouseCursors.click, child: Container(
+              width: 28, height: 28,
+              decoration: BoxDecoration(
+                color: col,
+                shape: BoxShape.circle,
+                border: _color == col ? Border.all(color: c.textPrimary, width: 2) : null,
+              ),
+            )),
+          )).toList()),
+          const SizedBox(height: 16),
+
+          // Icon picker
+          _label(c, 'ICON'),
+          const SizedBox(height: 8),
+          Wrap(spacing: 8, runSpacing: 8, children: _icons.entries.map((e) => GestureDetector(
+            onTap: () => setState(() => _icon = e.value),
+            child: MouseRegion(cursor: SystemMouseCursors.click, child: Container(
+              width: 36, height: 36,
+              decoration: BoxDecoration(
+                color: _icon == e.value ? _color.withValues(alpha: 0.15) : c.border.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(8),
+                border: _icon == e.value ? Border.all(color: _color) : null,
+              ),
+              child: Icon(e.value, size: 18, color: _icon == e.value ? _color : c.textSecondary),
+            )),
+          )).toList()),
+          const SizedBox(height: 20),
+
+          // Positions
+          if (widget.positions.isNotEmpty) ...[
+            _label(c, 'ASSIGN POSITIONS (enter qty per ticker)'),
+            const SizedBox(height: 10),
+            ...widget.positions.map((p) {
+              final ctrl = _qtyCtrl[p.symbol]!;
+              return Padding(padding: const EdgeInsets.only(bottom: 8), child: Row(children: [
+                Container(width: 36, height: 36,
+                  decoration: BoxDecoration(color: c.border.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(8)),
+                  child: Center(child: Text(p.symbol.length > 4 ? p.symbol.substring(0,4) : p.symbol, style: TextStyle(color: c.textPrimary, fontSize: 9, fontWeight: FontWeight.w700))),
+                ),
+                const SizedBox(width: 10),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(p.symbol, style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+                  Text('max ${p.qty % 1 == 0 ? p.qty.toInt() : p.qty.toStringAsFixed(2)} shares', style: TextStyle(color: c.textSecondary, fontSize: 10)),
+                ])),
+                SizedBox(width: 80, child: TextField(
+                  controller: ctrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: c.textPrimary, fontSize: 13),
+                  decoration: InputDecoration(
+                    hintText: '0',
+                    hintStyle: TextStyle(color: c.textSecondary),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: c.border)),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: _color)),
+                  ),
+                )),
+              ]));
+            }),
+            const SizedBox(height: 16),
+          ],
+
+          // Notes
+          _label(c, 'NOTES'),
+          TextField(
+            controller: _notesCtrl,
+            maxLines: 3,
+            style: TextStyle(color: c.textPrimary, fontSize: 13),
+            decoration: InputDecoration(
+              hintText: 'Your rules, thesis, reminders...',
+              hintStyle: TextStyle(color: c.textSecondary),
+              isDense: true,
+              contentPadding: const EdgeInsets.all(12),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: c.border)),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: _color)),
+            ),
+          ),
+          const SizedBox(height: 24),
+        ]))),
+
+        // Footer buttons
+        Padding(padding: const EdgeInsets.fromLTRB(24, 0, 24, 24), child: Row(children: [
+          Expanded(child: GestureDetector(
+            onTap: () => Navigator.of(context).pop(),
+            child: MouseRegion(cursor: SystemMouseCursors.click, child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 13),
+              decoration: BoxDecoration(border: Border.all(color: c.border), borderRadius: BorderRadius.circular(10)),
+              child: Center(child: Text('Cancel', style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.w600))),
+            )),
+          )),
+          const SizedBox(width: 12),
+          Expanded(child: GestureDetector(
+            onTap: _submit,
+            child: MouseRegion(cursor: SystemMouseCursors.click, child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 13),
+              decoration: BoxDecoration(color: _color, borderRadius: BorderRadius.circular(10)),
+              child: Center(child: Text(isEdit ? 'Save' : 'Create', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600))),
+            )),
+          )),
+        ])),
+      ])),
+    );
+  }
+
+  static Widget _label(AppColors c, String text) => Padding(
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Text(text, style: TextStyle(color: c.textSecondary, fontSize: 9, fontWeight: FontWeight.w700, letterSpacing: 0.8)),
+  );
+
+  static Widget _field(AppColors c, TextEditingController ctrl, String hint, {TextInputType? keyboardType}) => TextField(
+    controller: ctrl,
+    keyboardType: keyboardType,
+    style: TextStyle(color: c.textPrimary, fontSize: 13),
+    decoration: InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(color: c.textSecondary),
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: c.border)),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: c.accent)),
+    ),
+  );
 }
 
 // ── Unassigned positions card ──

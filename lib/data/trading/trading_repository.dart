@@ -1,15 +1,20 @@
 import 'package:dio/dio.dart';
 
+import 'strategy_entity.dart';
 import 'trading_order_dto.dart';
 import 'trading_position_dto.dart';
 
 /// Репозиторий: авторизация на Investlink staging + загрузка orders.
 class TradingRepository {
-  TradingRepository({required Dio httpClient}) : _http = httpClient;
+  TradingRepository({required Dio httpClient, required Dio ilmClient})
+      : _http = httpClient,
+        _ilm = ilmClient;
 
-  final Dio _http;
+  final Dio _http; // ivlk proxy (app12-us-sw.ivlk.io через наш прокси)
+  final Dio _ilm;  // наш бэкенд (api.ilm-analytics.com)
 
   String? _accessToken;
+  String? _userEmail;
   // TODO: use for token refresh when access token expires
   // ignore: unused_field
   String? _refreshToken;
@@ -31,6 +36,7 @@ class TradingRepository {
       _accessToken = tokens['access'] as String?;
       _refreshToken = tokens['refresh'] as String?;
     }
+    _userEmail = email.toLowerCase().trim();
   }
 
   /// Загрузить все filled orders (автопагинация).
@@ -165,8 +171,51 @@ class TradingRepository {
         .toList();
   }
 
+  // ── Strategies (наш бэкенд) ───────────────────────────────────────────────
+
+  Map<String, String> get _ilmHeaders => {
+        if (_userEmail != null) 'X-User-Email': _userEmail!,
+      };
+
+  Future<List<StrategyEntity>> getStrategies() async {
+    final resp = await _ilm.get<List<dynamic>>(
+      '/trading/strategies',
+      options: Options(headers: _ilmHeaders),
+    );
+    return (resp.data ?? [])
+        .whereType<Map<String, dynamic>>()
+        .map(StrategyEntity.fromJson)
+        .toList();
+  }
+
+  Future<StrategyEntity> createStrategy(StrategyEntity s) async {
+    final resp = await _ilm.post<Map<String, dynamic>>(
+      '/trading/strategies',
+      data: s.toJson(),
+      options: Options(headers: _ilmHeaders),
+    );
+    return StrategyEntity.fromJson(resp.data!);
+  }
+
+  Future<StrategyEntity> updateStrategy(StrategyEntity s) async {
+    final resp = await _ilm.put<Map<String, dynamic>>(
+      '/trading/strategies/${s.id}',
+      data: s.toJson(),
+      options: Options(headers: _ilmHeaders),
+    );
+    return StrategyEntity.fromJson(resp.data!);
+  }
+
+  Future<void> deleteStrategy(String id) async {
+    await _ilm.delete<void>(
+      '/trading/strategies/$id',
+      options: Options(headers: _ilmHeaders),
+    );
+  }
+
   void logout() {
     _accessToken = null;
     _refreshToken = null;
+    _userEmail = null;
   }
 }

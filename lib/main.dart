@@ -50,11 +50,22 @@ class _AiStockAnalyzerAppState extends State<AiStockAnalyzerApp> {
     ),
   );
 
+  // Dio для нашего бэкенда (стратегии и прочее)
+  late final Dio _ilmDio = Dio(
+    BaseOptions(
+      baseUrl: AiStockAnalyzerApp._baseUrl,
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 30),
+      headers: {'ngrok-skip-browser-warning': 'true'},
+    ),
+  );
+
   @override
   void dispose() {
     _themeNotifier.dispose();
     _dio.close();
     _tradingDio.close();
+    _ilmDio.close();
     super.dispose();
   }
 
@@ -69,7 +80,10 @@ class _AiStockAnalyzerAppState extends State<AiStockAnalyzerApp> {
         ),
         BlocProvider(
           create: (_) => TradingAnalyticsCubit(
-            repository: TradingRepository(httpClient: _tradingDio),
+            repository: TradingRepository(
+              httpClient: _tradingDio,
+              ilmClient: _ilmDio,
+            ),
           ),
         ),
         BlocProvider(create: (_) => AiCubit()),

@@ -122,8 +122,9 @@ class TradingAnalyticsCubit extends Cubit<TradingAnalyticsState> {
     // Lazy-load data for the page.
     if (page == TradingPage.portfolio && state.positions.isEmpty) {
       loadPositions();
-    } else if (page == TradingPage.strategies && state.positions.isEmpty) {
-      loadPositions();
+    } else if (page == TradingPage.strategies) {
+      if (state.positions.isEmpty) loadPositions();
+      if (state.strategies.isEmpty) loadStrategies();
     } else if (page == TradingPage.orders && state.recentOrders.isEmpty) {
       loadOrders();
     }
@@ -178,6 +179,8 @@ class TradingAnalyticsCubit extends Cubit<TradingAnalyticsState> {
         savedPassword: password,
         clearFilter: true,
       ));
+      // Load strategies in background after login
+      loadStrategies();
     } catch (e) {
       emit(state.copyWith(
         status: TradingAnalyticsStatus.error,
@@ -264,6 +267,51 @@ class TradingAnalyticsCubit extends Cubit<TradingAnalyticsState> {
     }).toList();
     final analytics = TradingAnalyticsCalculator.calculate(filtered);
     emit(state.copyWith(analytics: analytics, filterFrom: from, filterTo: to));
+  }
+
+  // ── Strategies ────────────────────────────────────────────────────────────
+
+  Future<void> loadStrategies() async {
+    if (!_repo.isAuthenticated) return;
+    try {
+      final strategies = await _repo.getStrategies();
+      emit(state.copyWith(strategies: strategies));
+    } catch (_) {
+      // Silently fail — strategies are non-critical
+    }
+  }
+
+  Future<void> createStrategy(StrategyEntity s) async {
+    try {
+      final created = await _repo.createStrategy(s);
+      emit(state.copyWith(strategies: [...state.strategies, created]));
+    } catch (e) {
+      emit(state.copyWith(errorMessage: e.toString()));
+    }
+  }
+
+  Future<void> updateStrategy(StrategyEntity s) async {
+    try {
+      final updated = await _repo.updateStrategy(s);
+      emit(state.copyWith(
+        strategies: state.strategies
+            .map((x) => x.id == updated.id ? updated : x)
+            .toList(),
+      ));
+    } catch (e) {
+      emit(state.copyWith(errorMessage: e.toString()));
+    }
+  }
+
+  Future<void> deleteStrategy(String id) async {
+    try {
+      await _repo.deleteStrategy(id);
+      emit(state.copyWith(
+        strategies: state.strategies.where((x) => x.id != id).toList(),
+      ));
+    } catch (e) {
+      emit(state.copyWith(errorMessage: e.toString()));
+    }
   }
 
   Future<void> logout() async {

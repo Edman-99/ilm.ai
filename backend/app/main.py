@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1 import analysis, strategies, leads as leads_router, proxy as proxy_router
+from app.api.v1 import strategies_api
 from app.api.v1 import bot as bot_router
 from app.config import settings
 from app.domain import models
@@ -70,7 +71,8 @@ app.add_middleware(
 app.include_router(analysis.router,      prefix="/analyze",    tags=["analysis"])
 app.include_router(strategies.router,    prefix="/strategies", tags=["strategies"])
 app.include_router(leads_router.router,  prefix="/leads",      tags=["leads"])
-app.include_router(proxy_router.router,  prefix="/ivlk",       tags=["proxy"])
+app.include_router(proxy_router.router,      prefix="/ivlk",           tags=["proxy"])
+app.include_router(strategies_api.router,   prefix="/trading/strategies", tags=["trading-strategies"])
 
 # Trading Bot routes
 app.include_router(bot_router.router, prefix="/api/bot", tags=["bot"])
