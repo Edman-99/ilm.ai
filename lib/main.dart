@@ -17,7 +17,7 @@ void main() {
 class AiStockAnalyzerApp extends StatefulWidget {
   const AiStockAnalyzerApp({super.key});
 
-  static const _baseUrl = 'https://b5ab-31-171-168-220.ngrok-free.app';
+  static const _baseUrl = 'https://api.ilm-analytics.com';
 
   @override
   State<AiStockAnalyzerApp> createState() => _AiStockAnalyzerAppState();

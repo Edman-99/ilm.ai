@@ -1,0 +1,70 @@
+services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - certbot_certs:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
+      - frontend_dist:/var/www/frontend:ro
+    command: "/bin/sh -c 'while :; do sleep 24h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+
+  certbot:
+    image: certbot/certbot
+    network_mode: bridge
+    volumes:
+      - certbot_certs:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --quiet; sleep 12h & wait $${!}; done'"
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: trading
+      POSTGRES_PASSWORD: trading
+      POSTGRES_DB: trading
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trading -d trading"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    expose:
+      - "8000"
+    environment:
+      DATABASE_URL: postgresql://trading:trading@postgres:5432/trading
+      CLAUDE_API_KEY: ${CLAUDE_API_KEY}
+      FMP_API_KEY: ${FMP_API_KEY}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-in-production}
+      AUTH_BACKEND_URL: ${AUTH_BACKEND_URL:-https://app12-us-sw.ivlk.io}
+      ALPACA_SANDBOX: ${ALPACA_SANDBOX:-true}
+      BOT_JWT_SECRET: ${BOT_JWT_SECRET:-trading-bot-secret-2024}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: on-failure
+
+volumes:
+  postgres_data:
+  certbot_certs:
+  certbot_www:
+  frontend_dist:
+    external: true
+    name: trading-back_frontend_dist

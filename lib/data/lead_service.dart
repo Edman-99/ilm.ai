@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class LeadData {
@@ -49,7 +50,7 @@ class LeadService {
     );
   }
 
-  /// Save lead data locally + send to backend (mock).
+  /// Save lead data locally + send to backend.
   static Future<void> save(LeadData lead) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyFirst, lead.firstName);
@@ -57,8 +58,17 @@ class LeadService {
     await prefs.setString(_keyEmail, lead.email);
     await prefs.setString(_keyWhatsapp, lead.whatsapp);
 
-    // TODO: бэкендер — отправить на сервер
-    // await dio.post('/leads', data: lead.toJson());
+    try {
+      final dio = Dio(BaseOptions(
+        baseUrl: 'https://api.ilm-analytics.com',
+        connectTimeout: const Duration(seconds: 10),
+        receiveTimeout: const Duration(seconds: 10),
+        headers: {'ngrok-skip-browser-warning': 'true'},
+      ));
+      await dio.post('/leads', data: lead.toJson());
+    } catch (_) {
+      // Не блокируем пользователя если запрос упал
+    }
   }
 
   /// Clear saved lead (for testing).
