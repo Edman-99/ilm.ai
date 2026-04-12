@@ -13,9 +13,8 @@ from app.domain.schemas import (
     PortfolioResponse,
 )
 from app.infrastructure.claude_client import complete
-from app.infrastructure.market_data import fetch_ohlcv
 from app.repositories.analysis_repository import AnalysisRepository
-from app.services.analysis_service import ANALYSIS_MODES, build_rag_prompt, calc_indicators, calc_score
+from app.services.analysis_service import ANALYSIS_MODES, build_rag_prompt
 from app.services.portfolio_builder_service import (
     STRATEGY_METRICS,
     build_allocations,
@@ -106,51 +105,7 @@ async def analyze(
     context: str = "",
     db: Session = Depends(get_db),
 ):
-    ticker = ticker.upper().strip()
-
-    if not _TICKER_RE.match(ticker):
-        raise HTTPException(status_code=400, detail={"error": "invalidTicker"})
-    if mode not in ANALYSIS_MODES:
-        raise HTTPException(status_code=400, detail={"error": "invalidMode"})
-
-    try:
-        df = fetch_ohlcv(ticker)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail={"error": "tickerNotFound", "message": str(e)})
-
-    ind = calc_indicators(df)
-    score = calc_score(ind)
-    trend = "Bullish" if ind["sma20"] > ind["sma50"] else "Bearish"
-
-    try:
-        prompt = build_rag_prompt(ticker, ind, mode, context)
-        analysis = complete(prompt)
-    except Exception as e:
-        analysis = f"AI анализ временно недоступен: {str(e)}"
-
-    AnalysisRepository(db).save(
-        ticker=ticker, mode=mode, analysis=analysis,
-        score=score, trend=trend, price=ind["price"],
-    )
-
-    return AnalysisResponse(
-        ticker=ticker,
-        mode=mode,
-        mode_description=ANALYSIS_MODES[mode]["description"],
-        price=round(ind["price"], 2),
-        change_1m=round(ind["change_1m"], 1),
-        rsi=round(ind["rsi"], 1),
-        sma20=round(ind["sma20"], 2),
-        sma50=round(ind["sma50"], 2),
-        macd=round(ind["macd"], 4),
-        macd_signal=round(ind["macd_signal"], 4),
-        bb_upper=round(ind["bb_upper"], 2),
-        bb_lower=round(ind["bb_lower"], 2),
-        atr=round(ind["atr"], 2),
-        trend=trend,
-        score=score,
-        analysis=analysis,
-    )
+    raise HTTPException(status_code=501, detail={"error": "notImplemented", "message": "Ticker analysis coming soon"})
 
 
 @router.get("/{ticker}/history", response_model=list[AnalysisHistoryItem])
