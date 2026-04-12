@@ -61,7 +61,10 @@ final demoStrategies = <StrategyEntity>[
     icon: Icons.trending_up_rounded,
     color: const Color(0xFF22C55E),
     description: 'High-growth tech stocks with strong momentum',
-    symbols: ['NVDA', 'TSLA'],
+    entries: [
+      StrategyPositionEntry(id: 0, symbol: 'NVDA', qty: 5),
+      StrategyPositionEntry(id: 1, symbol: 'TSLA', qty: 3),
+    ],
   ),
   StrategyEntity(
     id: 'blue_chip',
@@ -69,6 +72,10 @@ final demoStrategies = <StrategyEntity>[
     icon: Icons.verified_rounded,
     color: const Color(0xFF3B82F6),
     description: 'Stable large-cap companies with consistent earnings',
-    symbols: ['AAPL', 'MSFT', 'GOOGL'],
+    entries: [
+      StrategyPositionEntry(id: 2, symbol: 'AAPL', qty: 10),
+      StrategyPositionEntry(id: 3, symbol: 'MSFT', qty: 5),
+      StrategyPositionEntry(id: 4, symbol: 'GOOGL', qty: 2),
+    ],
   ),
 ];
