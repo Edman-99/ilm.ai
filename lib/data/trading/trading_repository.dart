@@ -145,7 +145,7 @@ class TradingRepository {
   Future<List<double>> getSparkline(String symbol) async {
     final now = DateTime.now();
     final from = now.subtract(const Duration(days: 30));
-    final fmtD = (DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    String fmtD(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
     final resp = await _http.get<Map<String, dynamic>>(
       '/proxy_api/v1/polygon/ticker_history',

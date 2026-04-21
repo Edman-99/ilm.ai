@@ -1133,25 +1133,7 @@ class _LoginFormState extends State<_LoginForm> {
                   Text(_T.of(context).tradingAnalytics, style: TextStyle(color: c.textPrimary, fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
                   const SizedBox(height: 32),
 
-                  // Demo button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton.icon(
-                      onPressed: _onDemo,
-                      icon: const Icon(Icons.play_arrow_rounded),
-                      label: Text(s.tradingDemoButton, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Divider
-                  Row(children: [
-                    Expanded(child: Divider(color: c.border)),
-                    Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Text(s.tradingOrDivider, style: TextStyle(color: c.textSecondary, fontSize: 13))),
-                    Expanded(child: Divider(color: c.border)),
-                  ]),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 8),
 
                   if (!_showLogin) ...[
                     // Already client

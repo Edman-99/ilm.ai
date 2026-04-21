@@ -103,7 +103,7 @@ ${s.trend}: ${analysis.trend}
 RSI: ${analysis.rsi.toStringAsFixed(1)} · MACD: ${analysis.macd.toStringAsFixed(4)}
 ${analysis.modeDescription}
 
-— ILM AI Stock Analyzer''';
+— ILM Stock Analyzer''';
 
     Clipboard.setData(ClipboardData(text: text));
     AnalyticsService.instance.track('analysis_shared', {
